@@ -5,6 +5,31 @@ if (window.location.hostname === 'cryptolinkforearn.com' && window.location.path
     window.location.replace('https://cryptolinkforearn.com/links');
 }
 
+// 0.5. Tự động điền mật khẩu và đăng nhập cryptolinkforearn
+if (window.location.hostname === 'cryptolinkforearn.com' && window.location.pathname === '/login') {
+    chrome.storage.local.get(['cryptoEmail', 'cryptoPass'], (data) => {
+        if (data.cryptoEmail && data.cryptoPass) {
+            const doLogin = () => {
+                setTimeout(() => {
+                    const emailInput = document.querySelector('input[name="email"], input[type="email"]');
+                    const passInput = document.querySelector('input[name="password"], input[type="password"]');
+                    if (emailInput && passInput) {
+                        emailInput.value = data.cryptoEmail;
+                        passInput.value = data.cryptoPass;
+                        emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        passInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                        const btn = document.querySelector('button[type="submit"]');
+                        if (btn) btn.click();
+                    }
+                }, 800); // Đợi 800ms để trang web load xong các mã JS bảo mật
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', doLogin);
+            else doLogin();
+        }
+    });
+}
+
 // 1. Ghi nhận tức thời URL (Phòng trường hợp trang web dùng JS Redirect nhảy trang quá nhanh)
 if (window.location.hostname.includes('uptolink') && window.location.pathname.length > 1 && window.location.pathname !== '/') {
     chrome.storage.local.set({ lastUptoLink: window.location.href });
