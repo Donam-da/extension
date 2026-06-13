@@ -3,11 +3,42 @@ const ONLINE_CONFIG_URL = "https://gist.githubusercontent.com/Donam-da/f7c09d917
 let currentMachineId = "";
 let expiryInterval;
 
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16).toUpperCase();
-    });
+function getDeviceFingerprint() {
+    // Thu thập các thông số phần cứng cố định của máy (giống như IMEI)
+    const components = [
+        navigator.hardwareConcurrency || 0, // Số nhân CPU
+        navigator.deviceMemory || 0,        // Dung lượng RAM
+        screen.width,                       // Chiều rộng màn hình
+        screen.height,                      // Chiều cao màn hình
+        screen.colorDepth,                  // Độ sâu màu
+        navigator.platform || ""            // Nền tảng HĐH
+    ];
+
+    // Thu thập thông tin Card đồ họa (GPU) thực tế
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                components.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL));
+                components.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+            }
+        }
+    } catch (e) { }
+
+    const rawId = components.join('|');
+
+    // Thuật toán băm (Hash) thành một chuỗi mã máy cố định
+    let hash = 0;
+    for (let i = 0; i < rawId.length; i++) {
+        const char = rawId.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+
+    // Sinh ra mã có tiền tố HW- (Hardware)
+    return "HW-" + Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
 }
 
 function showLoginMsg(msg, color = "#ff5252") {
@@ -68,11 +99,13 @@ function startExpiryTimer(expiryStr) {
 
 function initLicensing() {
     chrome.storage.local.get(['machineId', 'licenseKey'], async (data) => {
-        // 1. Khởi tạo và lấy Mã Máy (HWID)
-        if (data.machineId) {
+        // 1. Khởi tạo và lấy Mã Máy (HWID) dựa trên phần cứng (IMEI ảo)
+        const hwFingerprint = getDeviceFingerprint();
+
+        if (data.machineId && data.machineId === hwFingerprint) {
             currentMachineId = data.machineId;
         } else {
-            currentMachineId = "EXT-" + generateUUID().substring(0, 8);
+            currentMachineId = hwFingerprint;
             chrome.storage.local.set({ machineId: currentMachineId });
         }
         document.getElementById('hwid-display').textContent = currentMachineId;
