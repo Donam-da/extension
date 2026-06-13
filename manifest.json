@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Fingerprint Spoofing Device",
+    "name": "Trùm trường C",
     "version": "1.0",
-    "description": "Giả lập thiết bị, User-Agent và Deep Fake Fingerprint bởi 36",
+    "description": "Hãy làm cô ấy theo đuổi bạn vì tiền",
     "permissions": [
         "storage",
         "declarativeNetRequest",

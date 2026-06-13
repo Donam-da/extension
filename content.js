@@ -153,7 +153,7 @@ function injectFloatingMenu() {
 
     const fab = document.createElement('div');
     fab.className = 'fab';
-    fab.textContent = '36'; // Logo hiển thị trong hình tròn
+    fab.textContent = 'VCL'; // Logo hiển thị trong hình tròn
     fab.title = 'Extension VIP Menu';
 
     fab.addEventListener('click', () => wrapper.classList.toggle('show'));
