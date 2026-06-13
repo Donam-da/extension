@@ -140,11 +140,32 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #00E5FF;
         }
+
+        .pin-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: transparent !important;
+            border: none !important;
+            color: #8b949e !important;
+            font-size: 16px !important;
+            cursor: pointer;
+            padding: 4px;
+            width: auto;
+            margin: 0;
+            box-shadow: none !important;
+        }
+
+        .pin-btn:hover {
+            color: #00E5FF !important;
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
+    <div class="container" style="position: relative;">
+        <button id="btn-pin-popup" class="pin-btn"
+            title="Ghim thành cửa sổ riêng (Không bị đóng khi bấm ra ngoài)">📌</button>
         <!-- MÀN HÌNH ĐĂNG NHẬP -->
         <div id="login-view" style="display: none;">
             <div class="header">
@@ -177,6 +198,19 @@
                 <div class="creator">Created by 36</div>
                 <div id="key-expiry-display"
                     style="color: #00bcd4; font-size: 11px; margin-top: 6px; font-weight: bold;">⏳ Hạn Key: Đang tải...
+                </div>
+                <div id="ip-info-display"
+                    style="color: #8b949e; font-size: 10px; margin-top: 8px; text-align: left; background: #161b22; padding: 6px 8px; border-radius: 4px; border: 1px dashed #30363d; display: none; line-height: 1.5;">
+                    <div style="display: grid; grid-template-columns: auto 1fr; column-gap: 8px;">
+                        <span>IPv4 now:</span> <span id="ipv4-current"
+                            style="color:#00FF41; word-break: break-all;">Đang tải...</span>
+                        <span>IPv4 old:</span> <span id="ipv4-old"
+                            style="color:#ffb74d; word-break: break-all;">Trống</span>
+                        <span>IPv6 now:</span> <span id="ipv6-current"
+                            style="color:#00E5FF; word-break: break-all;">Đang tải...</span>
+                        <span>IPv6 old:</span> <span id="ipv6-old"
+                            style="color:#ffb74d; word-break: break-all;">Trống</span>
+                    </div>
                 </div>
             </div>
 
