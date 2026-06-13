@@ -1,5 +1,8 @@
 window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
-    const profile = e.detail;
+    let profile = e.detail;
+    if (typeof profile === 'string') {
+        try { profile = JSON.parse(profile); } catch (err) { }
+    }
     if (!profile) return;
 
     // KỸ THUẬT VƯỢT MẶT TOSTRING() TOÀN CẦU (Không dùng Proxy để tránh bị phát hiện)
@@ -253,17 +256,63 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             // 10. Smart Back (Giữ lại tính năng của Admin)
             try {
                 const hostname = targetWin.location.hostname;
-                if (targetWin === targetWin.top && (hostname.includes('linkhuongdan.online') || hostname.includes('uptolink'))) {
-                    const backUrl = 'https://uptolink.vip';
-                    try { Object.defineProperty(targetWin.document, 'referrer', { get: function () { return backUrl; }, configurable: true }); } catch (e) { }
-                    targetWin.history.pushState({ page: 'hacked_back_button' }, "", targetWin.location.href);
-                    targetWin.addEventListener('popstate', function (event) { targetWin.location.href = backUrl; });
-                    targetWin.document.addEventListener('click', function (e) {
-                        let target = e.target.closest('a, button');
+                const href = targetWin.location.href;
+                if (targetWin === targetWin.top && (hostname.includes('online') || hostname.includes('uptolink') || hostname.includes('linkhuongdan') || href.includes('/online/'))) {
+                    const backUrl = profile.lastUptoLink || 'https://uptolink.vip';
+
+                    // Tuyệt chiêu: Giả lập "Điền link và ấn Enter" như người dùng thật
+                    const forceGoBack = () => {
+                        targetWin.location.href = backUrl; // Điền URL
+                        try {
+                            const a = targetWin.document.createElement('a'); // Tạo link ẩn
+                            a.href = backUrl;
+                            targetWin.document.body.appendChild(a);
+                            a.click(); // Tự động click (Enter)
+                        } catch (e) { }
+                    };
+
+                    // Ghi đè history.back và history.go để phòng trường hợp nút bấm dùng JS lùi trang
+                    try {
+                        const origBack = targetWin.History.prototype.back;
+                        targetWin.History.prototype.back = maskFunction(function () { forceGoBack(); }, origBack);
+
+                        const origGo = targetWin.History.prototype.go;
+                        targetWin.History.prototype.go = maskFunction(function (delta) {
+                            if (delta === -1) { forceGoBack(); }
+                            else { return origGo.call(this, delta); }
+                        }, origGo);
+                    } catch (e) { }
+
+                    // Bẫy nút Back của trình duyệt bằng cách đẩy 1 state giả
+                    if (!targetWin.history.state || targetWin.history.state.page !== 'hacked_back_button') {
+                        targetWin.history.pushState({ page: 'hacked_back_button' }, "", href);
+                    }
+                    targetWin.addEventListener('popstate', function (event) { forceGoBack(); });
+                    targetWin.onpopstate = function () { forceGoBack(); }; // Ghi đè thêm đề phòng website xóa sự kiện
+
+                    // Vô hiệu hoá pushState của trang web để chống History Trap (Trang web cố tình giam người dùng bằng cách spam pushState)
+                    try {
+                        const origPushState = targetWin.History.prototype.pushState;
+                        targetWin.History.prototype.pushState = maskFunction(function () { return null; }, origPushState);
+                        const origReplaceState = targetWin.History.prototype.replaceState;
+                        targetWin.History.prototype.replaceState = maskFunction(function () { return null; }, origReplaceState);
+                    } catch (e) { }
+                    targetWin.document.addEventListener('mousedown', function (e) {
+                        let target = e.target.closest('a, button, [onclick], [class*="btn"], [class*="button"], [class*="back"]');
                         if (target) {
-                            let text = (target.innerText || target.textContent || '').toLowerCase();
-                            if (text.includes('return') || text.includes('quay lại') || text.includes('trở về') || (target.href && target.href.includes('history.back()'))) {
-                                e.preventDefault(); e.stopPropagation(); targetWin.location.href = backUrl;
+                            let text = (target.innerText || target.textContent || '').toLowerCase().trim();
+                            let onclickAttr = target.getAttribute('onclick') || '';
+                            let hrefAttr = target.href || '';
+                            let className = (target.getAttribute('class') || '').toLowerCase();
+
+                            if ((text.length < 50 && (text.includes('return') || text.includes('quay lại') || text.includes('trở về') || text.includes('trở lại') || text.includes('đổi nhiệm vụ') || text.includes('back'))) ||
+                                className.includes('back') ||
+                                hrefAttr.includes('history.back') ||
+                                hrefAttr.includes('history.go(-1)') ||
+                                onclickAttr.includes('history.back') ||
+                                onclickAttr.includes('history.go(-1)')) {
+                                e.preventDefault(); e.stopPropagation();
+                                forceGoBack();
                             }
                         }
                     }, true);
