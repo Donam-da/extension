@@ -91,7 +91,7 @@ function injectFloatingMenu() {
     panel.className = 'panel';
     panel.innerHTML = `
         <div class="title">MENU NHANH VIP <span id="btn-pin-menu" title="Ghim bảng Extension ra màn hình" style="cursor: pointer; padding: 0 4px; font-size: 13px;">📌</span></div>
-        <button class="btn" id="btn-open-ext">Mở Giao Diện Ext</button>
+        <button class="btn" id="btn-close-all" style="color: #ffb74d; border-color: #ffb74d;">Đóng Toàn Bộ Tab</button>
         <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
         <button class="btn close" id="btn-hide">Ẩn nút nổi</button>
     `;
@@ -106,9 +106,8 @@ function injectFloatingMenu() {
         e.stopPropagation(); // Ngăn sự kiện click truyền ra ngoài
         chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_UI" });
     });
-    panel.querySelector('#btn-open-ext').addEventListener('click', () => {
-        chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_UI" });
-        panel.classList.remove('show');
+    panel.querySelector('#btn-close-all').addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: "CLOSE_ALL_TABS" });
     });
     panel.querySelector('#btn-change-task').addEventListener('click', () => {
         chrome.storage.local.get(['lastUptoLink'], (data) => {

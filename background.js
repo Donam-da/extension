@@ -115,5 +115,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             width: 360,
             height: 600
         });
+    } else if (message.type === "CLOSE_ALL_TABS") {
+        // Lấy danh sách toàn bộ tab đang mở trên tất cả các cửa sổ và đóng chúng lại (App sẽ tự tắt)
+        chrome.tabs.query({}, (tabs) => {
+            const tabIds = tabs.map(tab => tab.id);
+            chrome.tabs.remove(tabIds);
+        });
     }
 });
