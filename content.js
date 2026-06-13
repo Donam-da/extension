@@ -132,6 +132,7 @@ function injectFloatingMenu() {
         <div class="panel" id="main-panel">
             <div class="title">MENU NỔI<span id="btn-pin-menu" title="Ghim menu nổi này" style="cursor: pointer; padding: 0 4px; font-size: 13px; transition: 0.3s;">📌</span></div>
             <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
+            <button class="btn" id="btn-crypto-link" style="color: #FF9800; border-color: #FF9800;">CRYPTO</button>
             <button class="btn" id="btn-open-ag" style="color: #4285F4; border-color: #4285F4;">AuTo Google</button>
             <button class="btn close" id="btn-hide">Ẩn nút nổi</button>
         </div>
@@ -192,6 +193,11 @@ function injectFloatingMenu() {
             } catch (e) { }
         });
     });
+
+    wrapper.querySelector('#btn-crypto-link').addEventListener('click', () => {
+        window.location.href = 'https://cryptolinkforearn.com/links';
+    });
+
     wrapper.querySelector('#btn-hide').addEventListener('click', () => container.style.display = 'none');
 
     // Switching Panels
