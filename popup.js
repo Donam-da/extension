@@ -384,7 +384,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     const selected = document.getElementById('profile-select').value;
     let profile;
     if (selected === "random") profile = generateRandomProfile();
-    else if (selected === "random_chrome_standard" || selected === "random_linktot") profile = generateStandardChromeProfile();
+    else if (selected === "random_noise") profile = generateStandardChromeProfile();
     else {
         profile = JSON.parse(JSON.stringify(profiles[selected]));
         const chromeMinor = Math.floor(Math.random() * 5000) + 1000;

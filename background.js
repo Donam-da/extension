@@ -85,7 +85,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                                 }
                             }, 800);
                         },
-                        args: [creds.email, creds.pass]
+                        args: [creds.email || "", creds.pass || ""]
                     }).catch(err => console.log(err));
                 }
             };
