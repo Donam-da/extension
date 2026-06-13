@@ -68,6 +68,9 @@ if (window.location.hostname.includes('google.') && window.location.pathname ===
 
 // 3. TẠO ICON NỔI (QUICK MENU) TRÊN MỌI TRANG WEB
 function injectFloatingMenu() {
+    // Chỉ tạo nút nổi trên cửa sổ duyệt web chính, ngăn không cho tạo bên trong các iframe (như popup của Google)
+    if (window !== window.top) return;
+
     // Tránh việc tạo trùng lặp nút nếu trang web gọi lại
     if (document.getElementById('vip-ext-floating-menu')) return;
 
