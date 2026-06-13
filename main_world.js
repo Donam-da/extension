@@ -2,11 +2,20 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     const profile = e.detail;
     if (!profile) return;
 
+    // KỸ THUẬT VƯỢT MẶT TOSTRING() TOÀN CẦU (Không dùng Proxy để tránh bị phát hiện)
+    const originalToString = Function.prototype.toString;
+    Function.prototype.toString = function toString() {
+        if (this && this.__originalFn) return originalToString.call(this.__originalFn);
+        if (this === Function.prototype.toString) return originalToString.call(originalToString);
+        return originalToString.call(this);
+    };
+    Function.prototype.toString.__originalFn = originalToString;
+
     const maskFunction = (fakeFn, originalFn) => {
-        const originalToString = Function.prototype.toString;
-        fakeFn.toString = function toString() { return originalToString.call(originalFn); };
-        fakeFn.toString.toString = function toString() { return originalToString.call(originalToString); };
-        if (originalFn.name) Object.defineProperty(fakeFn, 'name', { value: originalFn.name, configurable: true });
+        fakeFn.__originalFn = originalFn;
+        if (originalFn && originalFn.name) {
+            try { Object.defineProperty(fakeFn, 'name', { value: originalFn.name, configurable: true }); } catch (e) { }
+        }
         return fakeFn;
     };
 
@@ -14,13 +23,11 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
         try {
             const originalDesc = Object.getOwnPropertyDescriptor(obj, prop);
             const fakeGetter = function () { return value; };
-            const originalToString = Function.prototype.toString;
             if (originalDesc && originalDesc.get) {
-                fakeGetter.toString = function toString() { return originalToString.call(originalDesc.get); };
+                fakeGetter.__originalFn = originalDesc.get;
             } else {
-                fakeGetter.toString = function toString() { return "function get " + prop + "() { [native code] }"; };
+                fakeGetter.__originalFn = function () { return "function get " + prop + "() { [native code] }"; };
             }
-            fakeGetter.toString.toString = function toString() { return originalToString.call(originalToString); };
             Object.defineProperty(obj, prop, { get: fakeGetter, configurable: true, enumerable: true });
         } catch (e) { }
     };
@@ -94,47 +101,6 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 }, originalGetParameter2);
             }
 
-            // 4. Deep Fake Canvas Noise
-            if (targetWin.HTMLCanvasElement) {
-                const originalToDataURL = targetWin.HTMLCanvasElement.prototype.toDataURL;
-                targetWin.HTMLCanvasElement.prototype.toDataURL = maskFunction(function (...args) {
-                    try {
-                        const ctx = this.getContext('2d');
-                        if (ctx) {
-                            ctx.fillStyle = "rgba(" + ((Math.abs(profile.canvasR) * 10) % 255) + ", " + ((Math.abs(profile.canvasG) * 10) % 255) + ", " + ((Math.abs(profile.canvasB) * 10) % 255) + ", 0.01)";
-                            ctx.fillRect(0, 0, 1, 1);
-                        }
-                    } catch (e) { }
-                    return originalToDataURL.apply(this, args);
-                }, originalToDataURL);
-
-                const originalToBlob = targetWin.HTMLCanvasElement.prototype.toBlob;
-                targetWin.HTMLCanvasElement.prototype.toBlob = maskFunction(function (callback, type, quality) {
-                    try {
-                        const ctx = this.getContext('2d');
-                        if (ctx) {
-                            ctx.fillStyle = "rgba(" + ((Math.abs(profile.canvasR) * 10) % 255) + ", " + ((Math.abs(profile.canvasG) * 10) % 255) + ", " + ((Math.abs(profile.canvasB) * 10) % 255) + ", 0.01)";
-                            ctx.fillRect(0, 0, 1, 1);
-                        }
-                    } catch (e) { }
-                    return originalToBlob.call(this, callback, type, quality);
-                }, originalToBlob);
-            }
-            if (targetWin.CanvasRenderingContext2D) {
-                const originalGetImageData = targetWin.CanvasRenderingContext2D.prototype.getImageData;
-                targetWin.CanvasRenderingContext2D.prototype.getImageData = maskFunction(function (x, y, width, height) {
-                    const imageData = originalGetImageData.call(this, x, y, width, height);
-                    if (imageData && imageData.data && imageData.data.length > 0) {
-                        for (let i = 0; i < Math.min(64, imageData.data.length); i += 4) {
-                            imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + profile.canvasR));
-                            imageData.data[i + 1] = Math.min(255, Math.max(0, imageData.data[i + 1] + profile.canvasG));
-                            imageData.data[i + 2] = Math.min(255, Math.max(0, imageData.data[i + 2] + profile.canvasB));
-                        }
-                    }
-                    return imageData;
-                }, originalGetImageData);
-            }
-
             // 5. Deep Fake Audio
             if (targetWin.AudioBuffer) {
                 const originalGetChannelData = targetWin.AudioBuffer.prototype.getChannelData;
@@ -197,6 +163,113 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                     });
                 }, originalGetHighEntropyValues);
             }
+
+            // 8. Fake Web Worker (Đánh chặn Dedicated Workers từ bên trong applySpoofing)
+            try {
+                const OriginalWorker = targetWin.Worker;
+                if (OriginalWorker) {
+                    targetWin.Worker = maskFunction(function Worker(scriptURL, options) {
+                        try {
+                            const workerSpoofCode = `
+                                Object.defineProperty(navigator, 'userAgent', { get: () => "${profile.ua}" });
+                                Object.defineProperty(navigator, 'platform', { get: () => "${profile.platform}" });
+                                Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => ${profile.hardwareConcurrency} });
+                                Object.defineProperty(navigator, 'deviceMemory', { get: () => ${profile.deviceMemory} });
+                            `;
+                            const blob = new Blob([
+                                workerSpoofCode + `\nimportScripts('${new URL(scriptURL, document.baseURI).href}');`
+                            ], { type: 'application/javascript' });
+
+                            const blobUrl = URL.createObjectURL(blob);
+                            return new OriginalWorker(blobUrl, options);
+                        } catch (e) {
+                            return new OriginalWorker(scriptURL, options);
+                        }
+                    }, OriginalWorker);
+                }
+            } catch (e) { }
+
+            // 9. Fake DOMRect (Chống thuật toán kiểm tra kích thước đồ hoạ của CreepJS)
+            if (targetWin.Element) {
+                const originalGetClientRects = targetWin.Element.prototype.getClientRects;
+                targetWin.Element.prototype.getClientRects = maskFunction(function () {
+                    const rects = originalGetClientRects.call(this);
+                    for (let i = 0; i < rects.length; i++) {
+                        try { Object.defineProperty(rects[i], 'width', { value: rects[i].width + (profile.canvasR * 0.0001), configurable: true }); } catch (e) { }
+                    }
+                    return rects;
+                }, originalGetClientRects);
+
+                const originalGetBoundingClientRect = targetWin.Element.prototype.getBoundingClientRect;
+                targetWin.Element.prototype.getBoundingClientRect = maskFunction(function () {
+                    const rect = originalGetBoundingClientRect.call(this);
+                    try {
+                        Object.defineProperty(rect, 'width', { value: rect.width + (profile.canvasR * 0.0001), configurable: true });
+                        Object.defineProperty(rect, 'height', { value: rect.height + (profile.canvasG * 0.0001), configurable: true });
+                    } catch (e) { }
+                    return rect;
+                }, originalGetBoundingClientRect);
+            }
+
+            // 9.5. Chặn rò rỉ IP qua WebRTC (Xóa STUN/TURN Servers)
+            const spoofRTC = (RTClass) => {
+                if (!RTClass) return;
+                const originalRTC = RTClass;
+                const fakeRTC = maskFunction(function (config) {
+                    let safeConfig = {};
+                    if (config) {
+                        try { safeConfig = JSON.parse(JSON.stringify(config)); }
+                        catch (e) { safeConfig = { ...config }; }
+                    }
+                    safeConfig.iceServers = []; // Xóa sạch máy chủ STUN/TURN
+                    safeConfig.iceTransportPolicy = 'relay'; // Ép dùng TURN (nếu không có sẽ chặn hoàn toàn quá trình lấy IP)
+
+                    const pc = new originalRTC(safeConfig);
+                    if (pc.setConfiguration) {
+                        const origSet = pc.setConfiguration;
+                        pc.setConfiguration = maskFunction(function (cfg) {
+                            let safeCfg = cfg ? { ...cfg } : {};
+                            safeCfg.iceServers = [];
+                            safeCfg.iceTransportPolicy = 'relay';
+                            return origSet.call(this, safeCfg);
+                        }, origSet);
+                    }
+                    return pc;
+                }, originalRTC);
+                fakeRTC.prototype = originalRTC.prototype;
+                return fakeRTC;
+            };
+            if (targetWin.RTCPeerConnection) targetWin.RTCPeerConnection = spoofRTC(targetWin.RTCPeerConnection);
+            if (targetWin.webkitRTCPeerConnection) targetWin.webkitRTCPeerConnection = spoofRTC(targetWin.webkitRTCPeerConnection);
+
+            // 9.6. Chặn Service Worker (Tránh bị soi cấu hình ngầm)
+            if (targetWin.navigator && targetWin.navigator.serviceWorker) {
+                const origRegister = targetWin.navigator.serviceWorker.register;
+                targetWin.navigator.serviceWorker.register = maskFunction(function () {
+                    return Promise.reject(new Error("Service Worker is disabled for privacy"));
+                }, origRegister);
+            }
+
+            // 10. Smart Back (Giữ lại tính năng của Admin)
+            try {
+                const hostname = targetWin.location.hostname;
+                if (targetWin === targetWin.top && (hostname.includes('linkhuongdan.online') || hostname.includes('uptolink'))) {
+                    const backUrl = 'https://uptolink.vip';
+                    try { Object.defineProperty(targetWin.document, 'referrer', { get: function () { return backUrl; }, configurable: true }); } catch (e) { }
+                    targetWin.history.pushState({ page: 'hacked_back_button' }, "", targetWin.location.href);
+                    targetWin.addEventListener('popstate', function (event) { targetWin.location.href = backUrl; });
+                    targetWin.document.addEventListener('click', function (e) {
+                        let target = e.target.closest('a, button');
+                        if (target) {
+                            let text = (target.innerText || target.textContent || '').toLowerCase();
+                            if (text.includes('return') || text.includes('quay lại') || text.includes('trở về') || (target.href && target.href.includes('history.back()'))) {
+                                e.preventDefault(); e.stopPropagation(); targetWin.location.href = backUrl;
+                            }
+                        }
+                    }, true);
+                }
+            } catch (e) { }
+
         } catch (e) { }
     }
 
@@ -226,27 +299,6 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             }, originalIframeCdGet),
             configurable: true
         });
-    } catch (e) { }
-
-    // 8. Smart Back (Tính năng nút Quay lại / Lấy link)
-    try {
-        const hostname = window.location.hostname;
-        // Chỉ kích hoạt thao tác chặn nút Back trên các trang nhiệm vụ cụ thể để không ảnh hưởng đến Chrome cá nhân
-        if (window === window.top && (hostname.includes('linkhuongdan.online') || hostname.includes('uptolink'))) {
-            const backUrl = 'https://uptolink.vip';
-            try { Object.defineProperty(document, 'referrer', { get: function () { return backUrl; }, configurable: true }); } catch (e) { }
-            window.history.pushState({ page: 'hacked_back_button' }, "", window.location.href);
-            window.addEventListener('popstate', function (event) { window.location.href = backUrl; });
-            document.addEventListener('click', function (e) {
-                let target = e.target.closest('a, button');
-                if (target) {
-                    let text = (target.innerText || target.textContent || '').toLowerCase();
-                    if (text.includes('return') || text.includes('quay lại') || text.includes('trở về') || (target.href && target.href.includes('history.back()'))) {
-                        e.preventDefault(); e.stopPropagation(); window.location.href = backUrl;
-                    }
-                }
-            }, true);
-        }
     } catch (e) { }
 
 }, { once: true });

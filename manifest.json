@@ -8,7 +8,8 @@
         "declarativeNetRequest",
         "declarativeNetRequestWithHostAccess",
         "scripting",
-        "browsingData"
+        "browsingData",
+        "privacy"
     ],
     "host_permissions": [
         "<all_urls>"

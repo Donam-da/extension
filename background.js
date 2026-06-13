@@ -1,4 +1,20 @@
+// Chặn rò rỉ IP thực qua WebRTC (Bắt buộc phải đi qua Proxy nếu có)
+chrome.privacy.network.webRTCIPHandlingPolicy.set({
+    value: 'disable_non_proxied_udp'
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === "GET_VALIDATED_PROFILE") {
+        // Người gác cổng: Chỉ cung cấp profile cho trang web nếu có Key hợp lệ trong máy
+        chrome.storage.local.get(['licenseKey', 'licenseExpiry', 'spoofProfile'], (data) => {
+            if (data.licenseKey && data.licenseExpiry && data.spoofProfile) {
+                sendResponse({ profile: data.spoofProfile });
+            } else {
+                sendResponse({ profile: null });
+            }
+        });
+        return true; // Giữ kênh giao tiếp mở
+    }
     if (message.type === "UPDATE_RULES") {
         const profile = message.profile;
         const ruleId = 1;
