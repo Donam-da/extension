@@ -1,0 +1,46 @@
+{
+    "manifest_version": 3,
+    "name": "Fingerprint Spoofing Device",
+    "version": "1.0",
+    "description": "Giả lập thiết bị, User-Agent và Deep Fake Fingerprint bởi 36",
+    "permissions": [
+        "storage",
+        "declarativeNetRequest",
+        "declarativeNetRequestWithHostAccess",
+        "scripting",
+        "browsingData"
+    ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "main_world.js"
+            ],
+            "run_at": "document_start",
+            "all_frames": true,
+            "world": "MAIN"
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_start",
+            "all_frames": true,
+            "world": "ISOLATED"
+        }
+    ]
+}

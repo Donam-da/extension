@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fingerprint Spoofing</title>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background-color: #0D1117;
+            color: #c9d1d9;
+            width: 340px;
+            padding: 0;
+            margin: 0;
+        }
+
+        .container {
+            padding: 16px;
+            border: 1px solid #30363d;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px dashed #30363d;
+        }
+
+        h3 {
+            color: #00E5FF;
+            margin: 0;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            text-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
+        }
+
+        .creator {
+            color: #FF0055;
+            font-size: 11px;
+            margin-top: 6px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .box {
+            background: #161b22;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border: 1px solid #30363d;
+            max-height: 250px;
+            overflow-y: auto;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .label {
+            color: #8b949e;
+            font-size: 10px;
+            margin-bottom: 3px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .value {
+            color: #00FF41;
+            font-size: 11.5px;
+            font-weight: bold;
+            word-wrap: break-word;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        .value:last-child {
+            margin-bottom: 0;
+        }
+
+        .ua-text {
+            color: #ffb74d;
+            font-size: 10.5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #0D1117;
+            color: #00E5FF;
+            border: 1px solid #00E5FF;
+            font-family: 'Consolas', monospace;
+            font-weight: bold;
+            font-size: 13px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background: #00E5FF;
+            color: #000;
+            box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            background: #0D1117;
+            color: #00FF41;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            font-weight: bold;
+            outline: none;
+            cursor: pointer;
+            transition: border 0.3s;
+        }
+
+        select:focus {
+            border-color: #00E5FF;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0D1117;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00E5FF;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- MÀN HÌNH ĐĂNG NHẬP -->
+        <div id="login-view" style="display: none;">
+            <div class="header">
+                <h3>[ KÍCH HOẠT BẢN QUYỀN ]</h3>
+                <div class="creator">Extension VIP by 36</div>
+            </div>
+            <div class="box" style="text-align: center;">
+                <div class="label" style="font-size: 11px;">&gt; MÃ MÁY TRÌNH DUYỆT CỦA BẠN &lt;</div>
+                <div class="value" id="hwid-display" style="font-size: 14px; margin: 10px 0; color: #ffb74d;">
+                    Đang tải...</div>
+                <button id="btn-copy-hwid"
+                    style="margin-top: 0; padding: 6px; font-size: 11px; border-color: #ffb74d; color: #ffb74d;">COPY
+                    MÃ MÁY</button>
+            </div>
+
+            <input type="text" id="key-input" placeholder="Nhập Key kích hoạt vào đây..."
+                style="width: 100%; padding: 10px; box-sizing: border-box; background: #0D1117; color: #00E5FF; border: 1px solid #FF0055; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px; font-weight: bold; outline: none; margin-top: 5px; text-align: center;">
+
+            <button id="btn-login" style="border-color: #FF0055; color: #FF0055;">&gt; XÁC NHẬN KÍCH HOẠT &lt;</button>
+
+            <div id="login-status"
+                style="text-align: center; font-size: 11px; margin-top: 15px; font-weight: bold; color: #ff5252;">
+            </div>
+        </div>
+
+        <!-- MÀN HÌNH LÀM VIỆC CHÍNH -->
+        <div id="main-view" style="display: none;">
+            <div class="header">
+                <h3>[ FINGERPRINT SPOOFER ]</h3>
+                <div class="creator">Created by 36</div>
+                <div id="key-expiry-display"
+                    style="color: #00bcd4; font-size: 11px; margin-top: 6px; font-weight: bold;">⏳ Hạn Key: Đang tải...
+                </div>
+            </div>
+
+            <label class="label" style="display:block; margin-bottom: 6px;">> CHỌN CẤU HÌNH THIẾT BỊ:</label>
+            <select id="profile-select">
+                <optgroup label="[ KỊCH BẢN 1: ĐA DẠNG THIẾT BỊ ]">
+                    <option value="random">Random Nhiều Loại Máy (Xiaomi, Oppo...)</option>
+                    <option value="iphone">Cố định: iPhone 14 Pro Max</option>
+                </optgroup>
+                <optgroup label="[ KỊCH BẢN 2: CHROME CHUẨN SẠCH ]">
+                    <option value="random_noise">Random Bật Noise (Deep Fake Fingerprint)</option>
+                </optgroup>
+            </select>
+
+            <button id="apply-btn">&gt; ÁP DỤNG CẤU HÌNH &lt;</button>
+            <button id="crypto-btn" style="margin-top: 10px; border-color: #B300FF; color: #B300FF;">&gt; CRYPTO
+                (AUTO
+                LOGIN) &lt;</button>
+
+            <div class="box" id="info-box" style="margin-top: 15px; display: none;">
+                <div class="label">NỀN TẢNG / OS VERSION</div>
+                <div class="value" id="current-device">Đang tải...</div>
+                <div class="label">MÀN HÌNH</div>
+                <div class="value" id="current-screen">Đang tải...</div>
+                <div class="label">PHẦN CỨNG (RAM / CPU)</div>
+                <div class="value" id="current-hw">Đang tải...</div>
+                <div class="label">WEBGL (CARD ĐỒ HỌA)</div>
+                <div class="value" id="current-webgl">Đang tải...</div>
+                <div class="label">CANVAS / AUDIO NOISE</div>
+                <div class="value" id="current-noise">Đang tải...</div>
+                <div class="label">USER-AGENT ĐANG PHÂN TÍCH</div>
+                <div class="value ua-text" id="current-ua">Đang tải...</div>
+            </div>
+
+            <button id="btn-logout"
+                style="margin-top: 10px; border-color: #ff5252; color: #ff5252; background: #161b22;">[ ĐĂNG XUẤT
+                KEY ]</button>
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+
+</html>
