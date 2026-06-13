@@ -399,18 +399,7 @@ function generateStandardChromeProfile() {
 }
 
 function updateUI(profile) {
-    if (!document.getElementById('info-box')) return;
-    document.getElementById('info-box').style.display = 'block';
-    document.getElementById('current-device').textContent = profile.name + " (" + profile.platform + ")";
-    document.getElementById('current-screen').textContent = profile.screenWidth + "x" + profile.screenHeight;
-    document.getElementById('current-hw').textContent = profile.deviceMemory + "GB / " + profile.hardwareConcurrency + " Cores";
-    document.getElementById('current-webgl').textContent = profile.webglVendor + " - " + profile.webglRenderer;
-
-    let canvasStr = "R:" + (profile.canvasR || 0) + ", G:" + (profile.canvasG || 0) + ", B:" + (profile.canvasB || 0);
-    let audioStr = (profile.audioNoise || 0).toFixed(7);
-    document.getElementById('current-noise').textContent = "Canvas [" + canvasStr + "] | Audio [" + audioStr + "]";
-
-    document.getElementById('current-ua').textContent = profile.ua;
+    // Đã ẩn tính năng hiển thị thông số thiết bị do không còn cần thiết
 }
 
 document.getElementById('apply-btn').addEventListener('click', () => {

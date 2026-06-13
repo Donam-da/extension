@@ -43,6 +43,29 @@ document.addEventListener('mousedown', function (e) {
     }
 }, true);
 
+// 2.5. Auto Google Logic (Tự động điền Text và Enter trên Google)
+if (window.location.hostname.includes('google.') && window.location.pathname === '/') {
+    chrome.storage.local.get(['autoGoogleText'], (data) => {
+        if (data.autoGoogleText) {
+            const doGoogleSearch = () => {
+                const searchBox = document.querySelector('textarea[name="q"], input[name="q"]');
+                if (searchBox) {
+                    searchBox.value = data.autoGoogleText;
+                    searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    const form = searchBox.closest('form');
+                    setTimeout(() => {
+                        if (form) form.submit();
+                        else searchBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+                    }, 100); // Đợi 100ms để mô phỏng người thật thao tác
+                    chrome.storage.local.remove('autoGoogleText'); // Xóa lệnh sau khi chạy xong để không bị lặp
+                } else setTimeout(doGoogleSearch, 100);
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', doGoogleSearch);
+            else doGoogleSearch();
+        }
+    });
+}
+
 // 3. TẠO ICON NỔI (QUICK MENU) TRÊN MỌI TRANG WEB
 function injectFloatingMenu() {
     // Tránh việc tạo trùng lặp nút nếu trang web gọi lại
@@ -66,13 +89,16 @@ function injectFloatingMenu() {
             transition: all 0.3s ease; user-select: none;
         }
         .fab:hover { background: #00E5FF; color: #000; box-shadow: 0 0 15px rgba(0, 229, 255, 0.8); }
-        .panel {
+        .menu-wrapper {
             position: absolute; bottom: 65px; right: 0;
+            display: none; flex-direction: column; gap: 8px;
+        }
+        .menu-wrapper.show { display: flex; }
+        .panel {
             width: 180px; background: #0D1117; border: 1px solid #30363d;
-            border-radius: 8px; padding: 10px; display: none;
+            border-radius: 8px; padding: 10px; display: flex;
             flex-direction: column; gap: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        .panel.show { display: flex; }
         .title { color: #00FF41; font-size: 12px; text-align: center; font-weight: bold; border-bottom: 1px dashed #30363d; padding-bottom: 5px; margin-bottom: 5px; }
         .btn {
             background: #161b22; color: #00E5FF; border: 1px solid #30363d;
@@ -85,15 +111,40 @@ function injectFloatingMenu() {
         .btn.crypto:hover { background: #B300FF; color: #fff; }
         .btn.close { color: #ff5252; border-color: #ff5252; }
         .btn.close:hover { background: #ff5252; color: #000; }
+        
+        /* Auto Google Styles */
+        .ag-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 6px;
+            cursor: pointer; font-size: 11px; color: #c9d1d9; transition: border 0.2s;
+        }
+        .ag-item:hover { border-color: #00E5FF; }
+        .ag-item.selected { border-color: #4285F4; color: #4285F4; background: #0d1117; font-weight: bold; }
+        .ag-btn-del { color: #ff5252; cursor: pointer; font-weight: bold; padding: 0 4px; }
+        .ag-btn-del:hover { background: #ff5252; color: #fff; border-radius: 2px; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
     `;
 
-    const panel = document.createElement('div');
-    panel.className = 'panel';
-    panel.innerHTML = `
-        <div class="title">MENU NHANH VIP <span id="btn-pin-menu" title="Ghim bảng Extension ra màn hình" style="cursor: pointer; padding: 0 4px; font-size: 13px;">📌</span></div>
-        <button class="btn" id="btn-close-all" style="color: #ffb74d; border-color: #ffb74d;">Đóng Toàn Bộ Tab</button>
-        <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
-        <button class="btn close" id="btn-hide">Ẩn nút nổi</button>
+    const wrapper = document.createElement('div');
+    wrapper.className = 'menu-wrapper';
+    wrapper.innerHTML = `
+        <div class="panel" id="main-panel">
+            <div class="title">MENU NỔI<span id="btn-pin-menu" title="Ghim menu nổi này" style="cursor: pointer; padding: 0 4px; font-size: 13px; transition: 0.3s;">📌</span></div>
+            <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
+            <button class="btn" id="btn-open-ag" style="color: #4285F4; border-color: #4285F4;">AuTo Google</button>
+            <button class="btn close" id="btn-hide">Ẩn nút nổi</button>
+        </div>
+
+        <div class="panel" id="ag-panel" style="display: none; width: 220px;">
+            <div class="title" style="color: #4285F4;">AUTO GOOGLE <span id="btn-back-main" title="Quay lại" style="cursor: pointer; padding: 0 4px; font-size: 13px; float: right; margin-top: -2px;">🔙</span></div>
+            <div id="ag-list" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-bottom: 5px;"></div>
+            <div style="display: flex; gap: 4px; margin-bottom: 5px;">
+                <input type="text" id="ag-input" placeholder="Nhập text mới..." style="flex: 1; background: #0D1117; color: #00E5FF; border: 1px solid #30363d; border-radius: 4px; font-size: 11px; padding: 6px; outline: none;">
+                <button id="ag-add" style="background: #161b22; color: #00FF41; border: 1px solid #30363d; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; padding: 0 8px;">Thêm</button>
+            </div>
+            <button class="btn" id="ag-fill" style="background: #4285F4; color: #fff; border-color: #4285F4; font-size: 12px;">&gt; ĐIỀN VÀO GOOGLE &lt;</button>
+        </div>
     `;
 
     const fab = document.createElement('div');
@@ -101,15 +152,35 @@ function injectFloatingMenu() {
     fab.textContent = '36'; // Logo hiển thị trong hình tròn
     fab.title = 'Extension VIP Menu';
 
-    fab.addEventListener('click', () => panel.classList.toggle('show'));
-    panel.querySelector('#btn-pin-menu').addEventListener('click', (e) => {
+    fab.addEventListener('click', () => wrapper.classList.toggle('show'));
+
+    // Main Panel Events
+    const pinBtn = wrapper.querySelector('#btn-pin-menu');
+
+    chrome.storage.local.get(['isMenuPinned'], (data) => {
+        if (data.isMenuPinned) {
+            wrapper.classList.add('show');
+            pinBtn.style.filter = 'drop-shadow(0 0 3px #00FF41)';
+        }
+    });
+
+    pinBtn.addEventListener('click', (e) => {
         e.stopPropagation(); // Ngăn sự kiện click truyền ra ngoài
-        chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_UI" });
+        chrome.storage.local.get(['isMenuPinned'], (data) => {
+            const newState = !data.isMenuPinned;
+            chrome.storage.local.set({ isMenuPinned: newState }, () => {
+                if (newState) {
+                    pinBtn.style.filter = 'drop-shadow(0 0 3px #00FF41)';
+                    pinBtn.title = "Đã ghim (Sẽ tự động mở ở trang mới)";
+                } else {
+                    pinBtn.style.filter = 'none';
+                    pinBtn.title = "Ghim menu nổi này";
+                }
+            });
+        });
     });
-    panel.querySelector('#btn-close-all').addEventListener('click', () => {
-        chrome.runtime.sendMessage({ type: "CLOSE_ALL_TABS" });
-    });
-    panel.querySelector('#btn-change-task').addEventListener('click', () => {
+
+    wrapper.querySelector('#btn-change-task').addEventListener('click', () => {
         chrome.storage.local.get(['lastUptoLink'], (data) => {
             const backUrl = data.lastUptoLink || 'https://uptolink.vip';
             window.location.href = backUrl;
@@ -121,9 +192,96 @@ function injectFloatingMenu() {
             } catch (e) { }
         });
     });
-    panel.querySelector('#btn-hide').addEventListener('click', () => container.style.display = 'none');
+    wrapper.querySelector('#btn-hide').addEventListener('click', () => container.style.display = 'none');
 
-    shadow.appendChild(style); shadow.appendChild(panel); shadow.appendChild(fab);
+    // Switching Panels
+    const mainPanel = wrapper.querySelector('#main-panel');
+    const agPanel = wrapper.querySelector('#ag-panel');
+
+    wrapper.querySelector('#btn-open-ag').addEventListener('click', () => {
+        mainPanel.style.display = 'none';
+        agPanel.style.display = 'flex';
+        loadAgList();
+    });
+    wrapper.querySelector('#btn-back-main').addEventListener('click', () => {
+        agPanel.style.display = 'none';
+        mainPanel.style.display = 'flex';
+    });
+
+    // Auto Google Logic
+    let agTexts = [];
+    let agSelectedIdx = -1;
+    const listEl = wrapper.querySelector('#ag-list');
+    const inputEl = wrapper.querySelector('#ag-input');
+
+    const renderAgList = () => {
+        listEl.innerHTML = '';
+        agTexts.forEach((text, idx) => {
+            const item = document.createElement('div');
+            item.className = 'ag-item' + (idx === agSelectedIdx ? ' selected' : '');
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = text;
+            textSpan.style.cssText = 'flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px;';
+
+            const delBtn = document.createElement('span');
+            delBtn.textContent = 'X';
+            delBtn.className = 'ag-btn-del';
+            delBtn.title = 'Xóa';
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                agTexts.splice(idx, 1);
+                if (agSelectedIdx === idx) agSelectedIdx = -1;
+                else if (agSelectedIdx > idx) agSelectedIdx--;
+                chrome.storage.local.set({ autoGoogleList: agTexts });
+                renderAgList();
+            };
+
+            item.onclick = () => {
+                agSelectedIdx = idx;
+                renderAgList();
+            };
+
+            item.appendChild(textSpan);
+            item.appendChild(delBtn);
+            listEl.appendChild(item);
+        });
+    };
+
+    const loadAgList = () => {
+        chrome.storage.local.get(['autoGoogleList'], (data) => {
+            if (data.autoGoogleList) agTexts = data.autoGoogleList;
+            renderAgList();
+        });
+    };
+
+    wrapper.querySelector('#ag-add').addEventListener('click', () => {
+        const val = inputEl.value.trim();
+        if (val) {
+            agTexts.push(val);
+            chrome.storage.local.set({ autoGoogleList: agTexts });
+            inputEl.value = '';
+            agSelectedIdx = agTexts.length - 1; // Auto select newly added
+            renderAgList();
+        }
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') wrapper.querySelector('#ag-add').click();
+    });
+
+    wrapper.querySelector('#ag-fill').addEventListener('click', () => {
+        if (agSelectedIdx >= 0 && agSelectedIdx < agTexts.length) {
+            const text = agTexts[agSelectedIdx];
+            chrome.storage.local.set({ autoGoogleText: text }, () => {
+                window.open('https://www.google.com/', '_blank');
+            });
+        } else {
+            alert('Vui lòng chọn 1 dòng text trước khi Điền!');
+        }
+    });
+
+    shadow.appendChild(style); shadow.appendChild(wrapper); shadow.appendChild(fab);
     document.body.appendChild(container);
 }
 
