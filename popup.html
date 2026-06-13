@@ -191,9 +191,23 @@
             </select>
 
             <button id="apply-btn">&gt; ÁP DỤNG CẤU HÌNH &lt;</button>
-            <button id="crypto-btn" style="margin-top: 10px; border-color: #B300FF; color: #B300FF;">&gt; CRYPTO
-                (AUTO
-                LOGIN) &lt;</button>
+            <div style="display: flex; gap: 5px; margin-top: 10px;">
+                <button id="crypto-btn" style="flex: 1; margin-top: 0; border-color: #B300FF; color: #B300FF;">&gt;
+                    CRYPTO (AUTO LOGIN) &lt;</button>
+                <button id="crypto-settings-btn" title="Cài đặt tài khoản"
+                    style="width: 44px; margin-top: 0; border-color: #B300FF; color: #B300FF; padding: 0; font-size: 18px; display: flex; align-items: center; justify-content: center;">⚙</button>
+            </div>
+
+            <div class="box" id="crypto-settings-box" style="margin-top: 10px; display: none; border-color: #B300FF;">
+                <div class="label" style="color: #B300FF; text-align: center; margin-bottom: 10px;">CÀI ĐẶT TÀI KHOẢN
+                    CRYPTO</div>
+                <input type="text" id="crypto-email" placeholder="Email..."
+                    style="width: 100%; padding: 8px; box-sizing: border-box; background: #0D1117; color: #00E5FF; border: 1px solid #30363d; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 11px; outline: none; margin-bottom: 5px;">
+                <input type="password" id="crypto-pass" placeholder="Password..."
+                    style="width: 100%; padding: 8px; box-sizing: border-box; background: #0D1117; color: #00E5FF; border: 1px solid #30363d; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 11px; outline: none; margin-bottom: 10px;">
+                <button id="save-crypto-btn"
+                    style="margin-top: 0; border-color: #00FF41; color: #00FF41; padding: 8px;">LƯU TÀI KHOẢN</button>
+            </div>
 
             <div class="box" id="info-box" style="margin-top: 15px; display: none;">
                 <div class="label">NỀN TẢNG / OS VERSION</div>
