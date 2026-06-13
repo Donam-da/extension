@@ -156,7 +156,121 @@ function injectFloatingMenu() {
     fab.textContent = 'VCL'; // Logo hiển thị trong hình tròn
     fab.title = 'Extension VIP Menu';
 
-    fab.addEventListener('click', () => wrapper.classList.toggle('show'));
+    // --- LOGIC DI CHUYỂN NÚT NỔI (DRAGGABLE) ---
+    let isDragging = false;
+    let hasDragged = false;
+    let startX, startY;
+
+    fab.addEventListener('mousedown', dragStart);
+    fab.addEventListener('touchstart', dragStart, { passive: false });
+
+    function dragStart(e) {
+        if (e.button === 2) return; // Không kéo nếu click chuột phải
+        if (e.type === 'touchstart') {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        } else {
+            startX = e.clientX;
+            startY = e.clientY;
+            e.preventDefault(); // Tránh bôi đen text ngầm trên trang khi kéo
+        }
+
+        const rect = container.getBoundingClientRect();
+        container.style.bottom = 'auto';
+        container.style.right = 'auto';
+        container.style.left = rect.left + 'px';
+        container.style.top = rect.top + 'px';
+
+        isDragging = true;
+        hasDragged = false;
+
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('mouseup', dragEnd);
+        document.addEventListener('touchend', dragEnd);
+    }
+
+    function adjustMenuPosition() {
+        const rect = container.getBoundingClientRect();
+        // Tránh bị lẹm trên/dưới (Menu cao tối đa khoảng 250px)
+        if (rect.top < 250) {
+            wrapper.style.bottom = 'auto';
+            wrapper.style.top = '65px'; // Đẩy menu xuống dưới
+        } else {
+            wrapper.style.top = 'auto';
+            wrapper.style.bottom = '65px'; // Đẩy menu lên trên (mặc định)
+        }
+
+        // Tránh bị lẹm trái/phải (Menu rộng tối đa 220px)
+        if (rect.left < 220) {
+            wrapper.style.right = 'auto';
+            wrapper.style.left = '0'; // Đẩy menu sang phải
+        } else {
+            wrapper.style.left = 'auto';
+            wrapper.style.right = '0'; // Đẩy menu sang trái (mặc định)
+        }
+    }
+
+    function drag(e) {
+        if (!isDragging) return;
+        let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+        let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+
+        let dx = clientX - startX;
+        let dy = clientY - startY;
+
+        // Nếu di chuyển trên 3 pixel thì được tính là đang kéo (tránh nhận nhầm khi click)
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged = true;
+
+        let newLeft = container.offsetLeft + dx;
+        let newTop = container.offsetTop + dy;
+
+        // Giới hạn để icon không bị kéo văng ra ngoài khung màn hình
+        newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - container.offsetWidth));
+        newTop = Math.max(0, Math.min(newTop, window.innerHeight - container.offsetHeight));
+
+        container.style.left = newLeft + 'px';
+        container.style.top = newTop + 'px';
+
+        adjustMenuPosition(); // Đảo hướng linh hoạt ngay khi đang kéo
+
+        startX = clientX;
+        startY = clientY;
+        if (e.type === 'touchmove') e.preventDefault(); // Chống cuộn trang trên điện thoại
+    }
+
+    function dragEnd() {
+        isDragging = false;
+        document.removeEventListener('mousemove', drag);
+        document.removeEventListener('touchmove', drag);
+        document.removeEventListener('mouseup', dragEnd);
+        document.removeEventListener('touchend', dragEnd);
+
+        // Lưu vị trí vào Storage để giữ nguyên trên mọi trang web
+        chrome.storage.local.set({ menuPosX: container.style.left, menuPosY: container.style.top });
+    }
+
+    // Tải lại vị trí đã lưu trước đó (nếu có)
+    chrome.storage.local.get(['menuPosX', 'menuPosY'], (data) => {
+        if (data.menuPosX && data.menuPosY) {
+            container.style.bottom = 'auto';
+            container.style.right = 'auto';
+            container.style.left = data.menuPosX;
+            container.style.top = data.menuPosY;
+            setTimeout(adjustMenuPosition, 50); // Cập nhật hướng mở sau khi load vị trí cũ
+        }
+    });
+
+    fab.addEventListener('click', (e) => {
+        // Nếu vừa kéo xong thì KHÔNG mở menu (chặn hành vi click)
+        if (hasDragged) {
+            e.preventDefault();
+            return;
+        }
+        adjustMenuPosition(); // Tính toán lại hướng mở trước khi hiển thị popup
+        wrapper.classList.toggle('show');
+    });
+    // ------------------------------------------
 
     // Main Panel Events
     const pinBtn = wrapper.querySelector('#btn-pin-menu');
@@ -165,6 +279,7 @@ function injectFloatingMenu() {
         if (data.isMenuPinned) {
             wrapper.classList.add('show');
             pinBtn.style.filter = 'drop-shadow(0 0 3px #00FF41)';
+            setTimeout(adjustMenuPosition, 50);
         }
     });
 
