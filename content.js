@@ -66,8 +66,8 @@ function injectFloatingMenu() {
     panel.className = 'panel';
     panel.innerHTML = `
         <div class="title">MENU NHANH VIP</div>
-        <button class="btn" id="btn-upto">Trang chủ Uptolink</button>
-        <button class="btn crypto" id="btn-crypto">Mở Crypto Auto</button>
+        <button class="btn" id="btn-open-ext">Mở Giao Diện Ext</button>
+        <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
         <button class="btn close" id="btn-hide">Ẩn nút nổi</button>
     `;
 
@@ -77,12 +77,21 @@ function injectFloatingMenu() {
     fab.title = 'Extension VIP Menu';
 
     fab.addEventListener('click', () => panel.classList.toggle('show'));
-    panel.querySelector('#btn-upto').addEventListener('click', () => window.location.href = 'https://uptolink.vip');
-    panel.querySelector('#btn-crypto').addEventListener('click', () => {
-        chrome.storage.local.get(['cryptoEmail', 'cryptoPass'], (data) => {
-            chrome.runtime.sendMessage({ type: "OPEN_CRYPTO_LOGIN", creds: { email: data.cryptoEmail || "", pass: data.cryptoPass || "" } });
-        });
+    panel.querySelector('#btn-open-ext').addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_UI" });
         panel.classList.remove('show');
+    });
+    panel.querySelector('#btn-change-task').addEventListener('click', () => {
+        chrome.storage.local.get(['lastUptoLink'], (data) => {
+            const backUrl = data.lastUptoLink || 'https://uptolink.vip';
+            window.location.href = backUrl;
+            try {
+                const a = document.createElement('a');
+                a.href = backUrl;
+                document.body.appendChild(a);
+                a.click(); // Giả lập Enter mạnh mẽ
+            } catch (e) { }
+        });
     });
     panel.querySelector('#btn-hide').addEventListener('click', () => container.style.display = 'none');
 

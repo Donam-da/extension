@@ -107,5 +107,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             };
             chrome.tabs.onUpdated.addListener(listener);
         });
+    } else if (message.type === "OPEN_EXTENSION_UI") {
+        // Mở popup.html dưới dạng một cửa sổ nhỏ giả lập giao diện Extension
+        chrome.windows.create({
+            url: chrome.runtime.getURL("popup.html"),
+            type: "popup",
+            width: 360,
+            height: 600
+        });
     }
 });
