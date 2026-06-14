@@ -119,11 +119,14 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
         const logError = () => {
             let errBox = document.getElementById('vcl-cf-debug');
+            const parentNode = document.body || document.documentElement;
+            if (!parentNode) return; // Nếu web chưa tải xong HTML thì bỏ qua render hộp thoại
+
             if (!errBox) {
                 errBox = document.createElement('div');
                 errBox.id = 'vcl-cf-debug';
                 errBox.style.cssText = 'position: fixed; top: 10px; left: 10px; z-index: 2147483647; background: rgba(13, 17, 23, 0.95); color: #ff5252; border: 2px solid #ff5252; padding: 15px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; max-width: 90vw; max-height: 50vh; overflow-y: auto; box-shadow: 0 0 20px rgba(255, 82, 82, 0.5); pointer-events: none;';
-                document.body.appendChild(errBox);
+                parentNode.appendChild(errBox);
             }
 
             const errDiv = document.createElement('div');
@@ -137,8 +140,7 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             errBox.appendChild(errDiv);
         };
 
-        if (document.body) logError();
-        else document.addEventListener('DOMContentLoaded', logError);
+        logError();
     }
 
     window.addEventListener('error', function (e) {
@@ -294,6 +296,19 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
             // 4. Deep Fake Canvas (Nhiễu vân tay đồ họa)
             if (profile.canvasR && targetWin.HTMLCanvasElement) {
+                // Bơm thuộc tính willReadFrequently để tắt cảnh báo Performance của Chrome
+                const origGetContext = targetWin.HTMLCanvasElement.prototype.getContext;
+                const wrapperGetContext = {
+                    getContext(contextId, options) {
+                        if (contextId === '2d') {
+                            options = options || {};
+                            options.willReadFrequently = true;
+                        }
+                        return origGetContext.call(this, contextId, options);
+                    }
+                };
+                targetWin.HTMLCanvasElement.prototype.getContext = maskFunction(wrapperGetContext.getContext, origGetContext);
+
                 const origGetImageData = targetWin.CanvasRenderingContext2D.prototype.getImageData;
                 const wrapperCanvas = {
                     getImageData(x, y, w, h) {
