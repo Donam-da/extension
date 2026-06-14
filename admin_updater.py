@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import requests
 import zipfile
@@ -121,7 +122,10 @@ class AdminUpdaterGUI:
         self.log_area.see(tk.END)
         
     def load_initial_data(self):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
         token_path = os.path.join(base_dir, TOKEN_FILE)
         manifest_path = os.path.join(base_dir, "manifest.json")
 
@@ -162,7 +166,10 @@ class AdminUpdaterGUI:
 
     def save_token(self):
         token = self.token_entry.get().strip()
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
         token_path = os.path.join(base_dir, TOKEN_FILE)
         with open(token_path, "w", encoding="utf-8") as f:
             f.write(token)
