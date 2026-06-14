@@ -1,4 +1,35 @@
 // =====================================================================
+// HỆ THỐNG BẢO VỆ NATIVE C++ CHUẨN MỰC TỐI THƯỢNG
+// Khởi tạo ngay từ ms đầu tiên để bọc tất cả các hàm bị giả mạo.
+// =====================================================================
+const globalFnMap = new WeakMap();
+
+const maskFunction = (fakeFn, originalFn) => {
+    globalFnMap.set(fakeFn, originalFn);
+    if (originalFn && originalFn.name) {
+        try { Object.defineProperty(fakeFn, 'name', { value: originalFn.name, configurable: true }); } catch (e) { }
+    }
+    return fakeFn;
+};
+
+// Đè toString ngay lập tức để Turnstile không thể quét mã nguồn hàm
+if (Function.prototype.toString) {
+    const origToString = Function.prototype.toString;
+    const fakeToString = function toString() {
+        if (globalFnMap.has(this)) {
+            const target = globalFnMap.get(this);
+            if (typeof target === 'string') return target;
+            return origToString.call(target);
+        }
+        if (this === fakeToString) return origToString.call(origToString);
+        return origToString.call(this);
+    };
+    Function.prototype.toString = fakeToString;
+    globalFnMap.set(fakeToString, origToString);
+    globalFnMap.set(origToString, origToString);
+}
+
+// =====================================================================
 // LỚP PHÒNG NGỰ ĐỒNG BỘ (SYNCHRONOUS DEFENSE) - CHẠY NGAY LẬP TỨC
 // Ngăn chặn các trang web dùng inline script để bắt bài trước khi
 // Extension kịp nhận được Profile từ background.
@@ -11,22 +42,22 @@
                 const badVars = ['lemur', 'LemurApp', 'KiwiExtension', 'browser'];
                 for (let v of badVars) { try { delete win[v]; } catch (e) { } }
 
-                // 2. Định nghĩa lại window.chrome chỉ chứa csi và loadTimes (Chuẩn Chrome Mobile)
+                // 2. Dọn sạch window.chrome bằng DELETE sâu (TUYỆT ĐỐI KHÔNG DÙNG PROXY VÌ TURNSTILE SẼ PHÁT HIỆN)
                 if (win.chrome) {
-                    let fakeChrome = {};
-                    if (win.chrome.csi) fakeChrome.csi = win.chrome.csi;
-                    if (win.chrome.loadTimes) fakeChrome.loadTimes = win.chrome.loadTimes;
-                    try { Object.defineProperty(win, 'chrome', { value: fakeChrome, writable: true, configurable: true, enumerable: true }); } catch (e) { }
-                }
+                    const extKeys = ['runtime', 'extension', 'app', 'webstore', 'management', 'tabs', 'windows', 'storage', 'identity', 'alarms'];
+                    for (let key of extKeys) {
+                        try { delete win.chrome[key]; } catch (e) { }
+                    }
+                    try {
+                        const proto = Object.getPrototypeOf(win.chrome);
+                        if (proto && proto !== Object.prototype) {
+                            for (let key of extKeys) {
+                                try { delete proto[key]; } catch (e) { }
+                            }
+                        }
+                    } catch (e) { }
 
-                // 3. Xóa Plugins và MimeTypes nếu đang ở giao diện Mobile
-                if (/Android|Mobile/i.test(win.navigator.userAgent)) {
-                    try { Object.defineProperty(win.navigator, 'plugins', { get: () => [], configurable: true }); } catch (e) { }
-                    try { Object.defineProperty(win.navigator, 'mimeTypes', { get: () => [], configurable: true }); } catch (e) { }
                 }
-
-                // 4. Khóa Webdriver
-                try { Object.defineProperty(win.navigator, 'webdriver', { get: () => false, configurable: true }); } catch (e) { }
             } catch (e) { }
         };
 
@@ -35,16 +66,17 @@
         // Bảo vệ Iframe (Nếu web tạo Iframe bằng JS để luồn qua hệ thống check)
         if (window.HTMLIFrameElement && window.HTMLIFrameElement.prototype) {
             const iframeWinDesc = Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentWindow');
-            if (iframeWinDesc && iframeWinDesc.get) {
+            if (iframeWinDesc && iframeWinDesc.get && !globalFnMap.has(iframeWinDesc.get)) {
                 const origGet = iframeWinDesc.get;
-                Object.defineProperty(window.HTMLIFrameElement.prototype, 'contentWindow', {
-                    get: function () {
+                const wrapperWin = {
+                    get() {
                         const win = origGet.call(this);
                         if (win) sanitizeWindow(win);
                         return win;
-                    },
-                    configurable: true, enumerable: true
-                });
+                    }
+                };
+                const fakeGet = maskFunction(wrapperWin.get, origGet);
+                Object.defineProperty(window.HTMLIFrameElement.prototype, 'contentWindow', { get: fakeGet, configurable: true, enumerable: true });
             }
         }
 
@@ -53,7 +85,7 @@
             const origGetHighEntropyValues = navigator.userAgentData.getHighEntropyValues;
             window._isProfileReady = false;
 
-            navigator.userAgentData.getHighEntropyValues = function (hints) {
+            const fakeGetHighEntropyValues = function getHighEntropyValues(hints) {
                 if (!window._isProfileReady) {
                     return new Promise((resolve) => {
                         const waitInterval = setInterval(() => {
@@ -66,6 +98,7 @@
                 }
                 return origGetHighEntropyValues.call(this, hints);
             };
+            navigator.userAgentData.getHighEntropyValues = maskFunction(fakeGetHighEntropyValues, origGetHighEntropyValues);
         }
     } catch (e) { }
 })();
@@ -77,6 +110,7 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
         try { profile = JSON.parse(profile); } catch (err) { }
     }
     if (!profile) return;
+    window._spoofedProfile = profile; // Lưu trữ Profile để các Proxy đồng bộ có thể sử dụng
 
     // --- HỆ THỐNG RADAR BẮT LỖI CLOUDFLARE TRỰC TIẾP TRÊN MÀN HÌNH ---
     function showDebugError(msg, source, lineno, colno, error) {
@@ -115,17 +149,6 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
         if (e.reason) showDebugError(e.reason.message || "Promise Rejection", e.reason.stack || "", 0, 0, e.reason);
     }, true);
 
-    // SỬ DỤNG WEAKMAP TOÀN CỤC: Chia sẻ chung giữa cửa sổ chính và mọi Iframe con
-    const globalFnMap = new WeakMap();
-
-    const maskFunction = (fakeFn, originalFn) => {
-        globalFnMap.set(fakeFn, originalFn);
-        if (originalFn && originalFn.name) {
-            try { Object.defineProperty(fakeFn, 'name', { value: originalFn.name, configurable: true }); } catch (e) { }
-        }
-        return fakeFn;
-    };
-
     const defineMaskedGetter = (obj, prop, value, expectedClassName) => {
         try {
             const originalDesc = Object.getOwnPropertyDescriptor(obj, prop);
@@ -140,6 +163,7 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 }
             };
             const fakeGetter = wrapper.getter;
+            Object.defineProperty(fakeGetter, 'name', { value: `get ${prop}`, configurable: true });
 
             if (originalDesc && originalDesc.get) {
                 globalFnMap.set(fakeGetter, originalDesc.get);
@@ -160,7 +184,7 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             if (spoofedWindows.has(targetWin)) return;
             spoofedWindows.add(targetWin);
 
-            // 0. BẢO VỆ HÀM TOSTRING()
+            // 0. BẢO VỆ HÀM TOSTRING() CHO CÁC IFRAME CON MỚI TẠO
             if (targetWin.Function && targetWin.Function.prototype && targetWin.Function.prototype.toString) {
                 const origToString = targetWin.Function.prototype.toString;
                 if (!globalFnMap.has(origToString)) {
@@ -171,7 +195,7 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                                 if (typeof target === 'string') return target;
                                 return origToString.call(target);
                             }
-                            if (this === targetWin.Function.prototype.toString) return origToString.call(origToString);
+                            if (this === wrapper.toString) return origToString.call(origToString);
                             return origToString.call(this);
                         }
                     };
@@ -332,14 +356,12 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                         const extKeys = ['runtime', 'extension', 'app', 'webstore', 'management', 'tabs', 'windows', 'storage', 'identity', 'alarms'];
                         for (let key of extKeys) {
                             try { delete targetWin.chrome[key]; } catch (e) { }
-                            try { Object.defineProperty(targetWin.chrome, key, { get: undefined, set: undefined, value: undefined, configurable: true, enumerable: false }); } catch (e) { }
                         }
 
                         const chromeProto = Object.getPrototypeOf(targetWin.chrome);
                         if (chromeProto && chromeProto !== Object.prototype) {
                             for (let key of extKeys) {
                                 try { delete chromeProto[key]; } catch (e) { }
-                                try { Object.defineProperty(chromeProto, key, { get: undefined, set: undefined, value: undefined, configurable: true, enumerable: false }); } catch (e) { }
                             }
                         }
                     }

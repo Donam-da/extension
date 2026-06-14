@@ -496,7 +496,12 @@ function generateStandardChromeProfile() {
     let fullChromeVer = "";
     let chromeMajor = "128";
     if (realUaMatch) {
-        fullChromeVer = realUaMatch[1];
+        let parts = realUaMatch[1].split('.');
+        if (parts.length === 4) {
+            let patch = parseInt(parts[3]) + Math.floor(Math.random() * 100) - 50;
+            parts[3] = Math.max(0, patch).toString();
+        }
+        fullChromeVer = parts.join('.');
         chromeMajor = fullChromeVer.split('.')[0];
     } else {
         chromeMajor = (Math.floor(Math.random() * 10) + 120).toString();
@@ -641,19 +646,20 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: "CLEAR_BROWSING_DATA" }, (response) => {
         chrome.storage.local.set({ spoofProfile: profile }, () => {
             updateUI(profile);
-            chrome.runtime.sendMessage({ type: "UPDATE_RULES", profile: profile });
 
-            btn.textContent = "Success";
-            btn.style.background = "#00FF41";
-            btn.disabled = false;
-            setTimeout(() => {
-                btn.textContent = originalText;
-                btn.style = "";
-            }, 1000); // Rút ngắn thời gian chờ hiển thị Success xuống còn 1 giây (1000ms)
+            // Bắt buộc đợi rules mạng (Header) được cập nhật xong hoàn toàn rồi mới cho phép reload tab
+            chrome.runtime.sendMessage({ type: "UPDATE_RULES", profile: profile }, () => {
+                btn.textContent = "Success";
+                btn.style.background = "#00FF41";
+                btn.disabled = false;
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style = "";
+                }, 1000);
 
-            // Tự động tải lại tab hiện hành để trang web nhận diện danh tính mới ngay lập tức
-            chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-                if (tabs[0]) chrome.tabs.reload(tabs[0].id);
+                chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+                    if (tabs[0]) chrome.tabs.reload(tabs[0].id);
+                });
             });
         });
     });
