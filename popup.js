@@ -421,26 +421,10 @@ function generateRandomProfile() {
         fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
     }
 
-    // Sinh ngẫu nhiên mọi loại trình duyệt trên nền tảng di động
-    const browserTypes = ["Chrome", "Edge", "Opera", "SamsungBrowser"];
-    const browserType = browserTypes[Math.floor(Math.random() * browserTypes.length)];
-
-    let ua = "";
-    let browserNameStr = "";
-
-    if (browserType === "Edge") {
-        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36 EdgA/${chromeMajor}.0.${Math.floor(Math.random() * 50) + 2000}.0`;
-        browserNameStr = `Edge v${chromeMajor}`;
-    } else if (browserType === "Opera") {
-        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36 OPR/${Math.floor(Math.random() * 10) + 70}.0.2254.${Math.floor(Math.random() * 900) + 70000}`;
-        browserNameStr = `Opera (Chr ${chromeMajor})`;
-    } else if (browserType === "SamsungBrowser") {
-        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/${Math.floor(Math.random() * 5) + 20}.0 Chrome/${fullChromeVer} Mobile Safari/537.36`;
-        browserNameStr = `Samsung (Chr ${chromeMajor})`;
-    } else {
-        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`;
-        browserNameStr = `Chrome v${chromeMajor}`;
-    }
+    // Giải pháp tối thượng: Giữ nguyên 100% trình duyệt là CHROME để khớp hoàn toàn với lõi Kiwi
+    // Chỉ thay đổi thông số phần cứng, CPU, RAM, Tên máy và Phiên bản Android
+    let ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`;
+    let browserNameStr = `Chrome v${chromeMajor}`;
 
     const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
     const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
