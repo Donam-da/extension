@@ -55,19 +55,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 action: { type: "modifyHeaders", requestHeaders: requestHeaders },
                 condition: { urlFilter: "*", resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "ping", "script", "stylesheet", "image"] }
             };
-            chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId], addRules: [newRule] });
+            chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId], addRules: [newRule] }, () => {
+                sendResponse({ success: true });
+            });
         } else {
             // Nếu được cờ skipUaFake đánh dấu, ta dọn sạch rule cũ để trình duyệt tự gửi header thật
-            chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId] });
+            chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId] }, () => {
+                sendResponse({ success: true });
+            });
         }
+        return true; // Báo cho Chrome biết chúng ta sẽ trả về callback bất đồng bộ
     } else if (message.type === "CLEAR_BROWSING_DATA") {
         // Xóa sạch toàn bộ Cookie, Cache, LocalStorage để web quên danh tính cũ
         chrome.browsingData.remove({
             "since": 0
         }, {
-            "appcache": false,
-            "cache": false,
-            "cacheStorage": false,
+            "appcache": true,
+            "cache": true,
+            "cacheStorage": true,
             "cookies": true,
             "fileSystems": true,
             "indexedDB": true,

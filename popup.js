@@ -495,8 +495,8 @@ function generateStandardChromeProfile() {
     let fullChromeVer = "";
     let chromeMajor = "128";
     if (realUaMatch) {
-        fullChromeVer = realUaMatch[1];
-        chromeMajor = fullChromeVer.split('.')[0];
+        chromeMajor = realUaMatch[1].split('.')[0];
+        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
     } else {
         chromeMajor = (Math.floor(Math.random() * 10) + 120).toString();
         fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
@@ -508,8 +508,8 @@ function generateStandardChromeProfile() {
         name: `Chrome Chuẩn | ${devName} (Build/${buildId.split('.')[0]})`,
         ua: `Mozilla/5.0 (Linux; Android ${androidVer}; ${devName} Build/${buildId}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`,
         platform: "Linux aarch64",
-        hardwareConcurrency: 8,
-        deviceMemory: 8,
+        hardwareConcurrency: [4, 6, 8][Math.floor(Math.random() * 3)],
+        deviceMemory: [4, 6, 8, 12][Math.floor(Math.random() * 4)],
         screenWidth: [384, 393, 412][Math.floor(Math.random() * 3)],
         screenHeight: [850, 873, 892, 915][Math.floor(Math.random() * 4)],
         dsf: [2.0, 2.5, 3.0, 3.5][Math.floor(Math.random() * 4)],
@@ -551,7 +551,7 @@ function generateKiwiProfile() {
     const originalUa = navigator.userAgent;
     const realUaMatch = originalUa.match(/Chrome\/([0-9.]+)/);
     const chromeMajor = realUaMatch ? realUaMatch[1].split('.')[0] : "128";
-    const fullChromeVer = realUaMatch ? realUaMatch[1] : "128.0.6000.0";
+    const fullChromeVer = realUaMatch ? `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}` : "128.0.6000.0";
 
     const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
     const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
