@@ -41,7 +41,7 @@ function getDeviceFingerprint() {
     return "HW-" + Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
 }
 
-function showLoginMsg(msg, color = "#ff5252") {
+function showLoginMsg(msg, color = "var(--danger)") {
     const el = document.getElementById('login-status');
     el.textContent = msg;
     el.style.color = color;
@@ -54,13 +54,13 @@ function startExpiryTimer(expiryStr) {
 
     if (expiryStr === "Vĩnh viễn") {
         display.textContent = "⏳ Hạn Key: Vĩnh viễn";
-        display.style.color = "#00FF41";
+        display.style.color = "var(--secondary)";
         return;
     }
 
     if (expiryStr && expiryStr.startsWith("DURATION_MINS")) {
         display.textContent = "⏳ Hạn Key: Thời lượng (Chưa kích hoạt)";
-        display.style.color = "#ffb74d";
+        display.style.color = "var(--warning)";
         return;
     }
 
@@ -72,7 +72,7 @@ function startExpiryTimer(expiryStr) {
 
         if (diff <= 0) {
             display.textContent = "⏳ Hạn Key: ĐÃ HẾT HẠN!";
-            display.style.color = "#ff5252";
+            display.style.color = "var(--danger)";
             clearInterval(expiryInterval);
 
             // Tự động đăng xuất đẩy khách văng ra ngoài khi hết hạn
@@ -90,7 +90,7 @@ function startExpiryTimer(expiryStr) {
         else timeStr = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
         display.textContent = `⏳ Hạn Key: Còn ${timeStr}`;
-        display.style.color = (days === 0 && hours === 0) ? "#ff5252" : "#00E5FF";
+        display.style.color = (days === 0 && hours === 0) ? "var(--danger)" : "var(--primary)";
     }
 
     update();
@@ -107,29 +107,29 @@ async function checkForUpdates() {
         if (extConfig.latest_version && isNewerVersion(extConfig.latest_version, currentVersion)) {
             // Xoá giao diện hiện tại, hiển thị thông báo khóa App
             document.body.innerHTML = `
-                <div style="padding: 30px; text-align: center; font-family: 'Consolas', monospace; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #090e17; background-image: linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px); background-size: 15px 15px; color: #c9d1d9;">
-                    <div style="background: rgba(13, 20, 36, 0.8); border: 1px solid #1f2937; border-left: 4px solid #FF0055; border-radius: 8px; padding: 25px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(5px);">
-                        <h2 style="color: #FF0055; margin: 0 0 15px; font-size: 20px; letter-spacing: 1px; text-shadow: 0 0 10px rgba(255,0,85,0.4);">⚠️ YÊU CẦU CẬP NHẬT</h2>
-                        <div style="display: flex; justify-content: space-between; background: rgba(0,0,0,0.4); border: 1px solid #1f2937; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px;">
+                <div style="padding: 30px; text-align: center; font-family: 'Consolas', monospace; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg-color); background-image: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px); background-size: 15px 15px; color: var(--text-main);">
+                    <div style="background: var(--panel-bg); border: 1px solid var(--border); border-left: 4px solid var(--danger); border-radius: 8px; padding: 25px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(5px);">
+                        <h2 style="color: var(--danger); margin: 0 0 15px; font-size: 20px; letter-spacing: 1px;">⚠️ YÊU CẦU CẬP NHẬT</h2>
+                        <div style="display: flex; justify-content: space-between; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px;">
                             <div style="text-align: left;">
-                                <div style="color: #8b949e; font-size: 11px; margin-bottom: 5px;">Phiên bản hiện tại:</div>
-                                <div style="color: #ffb74d; font-weight: bold; text-shadow: 0 0 5px rgba(255, 183, 77, 0.4);">v${currentVersion}</div>
+                                <div style="color: var(--text-muted); font-size: 11px; margin-bottom: 5px;">Phiên bản hiện tại:</div>
+                                <div style="color: var(--warning); font-weight: bold;">v${currentVersion}</div>
                             </div>
                             <div style="text-align: right;">
-                                <div style="color: #8b949e; font-size: 11px; margin-bottom: 5px;">Phiên bản mới nhất:</div>
-                                <div style="color: #00FF41; font-weight: bold; text-shadow: 0 0 5px rgba(0, 255, 65, 0.4);">v${extConfig.latest_version}</div>
+                                <div style="color: var(--text-muted); font-size: 11px; margin-bottom: 5px;">Phiên bản mới nhất:</div>
+                                <div style="color: var(--secondary); font-weight: bold;">v${extConfig.latest_version}</div>
                             </div>
                         </div>
-                        <div style="margin: 0 0 20px; padding: 12px; background: rgba(0, 229, 255, 0.05); border-left: 3px solid #00E5FF; color: #e0f2fe; font-size: 12px; text-align: left; white-space: pre-wrap; line-height: 1.5;">${extConfig.update_message || "Đã có bản cập nhật mới. Vui lòng tải về để tiếp tục sử dụng!"}</div>
-                        <button id="btn-do-update" style="background: rgba(0, 229, 255, 0.1); color: #00E5FF; border: 1px solid #00E5FF; padding: 12px 20px; font-size: 14px; font-family: 'Consolas', monospace; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; transition: all 0.3s;">
+                        <div style="margin: 0 0 20px; padding: 12px; background: var(--grid-color); border-left: 3px solid var(--primary); color: var(--primary); font-size: 12px; text-align: left; white-space: pre-wrap; line-height: 1.5;">${extConfig.update_message || "Đã có bản cập nhật mới. Vui lòng tải về để tiếp tục sử dụng!"}</div>
+                        <button id="btn-do-update" style="background: var(--grid-color); color: var(--primary); border: 1px solid var(--primary); padding: 12px 20px; font-size: 14px; font-family: 'Consolas', monospace; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; transition: all 0.3s;">
                         Tải Bản Cập Nhật Ngay
                     </button>
                     </div>
                 </div>
             `;
             const btn = document.getElementById('btn-do-update');
-            btn.addEventListener('mouseover', () => { btn.style.background = '#00E5FF'; btn.style.color = '#000'; btn.style.boxShadow = '0 0 15px rgba(0, 229, 255, 0.5)'; btn.style.transform = 'translateY(-2px)'; });
-            btn.addEventListener('mouseout', () => { btn.style.background = 'rgba(0, 229, 255, 0.1)'; btn.style.color = '#00E5FF'; btn.style.boxShadow = 'none'; btn.style.transform = 'translateY(0)'; });
+            btn.addEventListener('mouseover', () => { btn.style.background = 'var(--primary)'; btn.style.color = 'var(--btn-hover-text)'; btn.style.boxShadow = '0 0 15px var(--primary-glow)'; btn.style.transform = 'translateY(-2px)'; });
+            btn.addEventListener('mouseout', () => { btn.style.background = 'var(--grid-color)'; btn.style.color = 'var(--primary)'; btn.style.boxShadow = 'none'; btn.style.transform = 'translateY(0)'; });
             document.getElementById('btn-do-update').addEventListener('click', () => {
                 window.open(extConfig.update_link, '_blank');
             });
@@ -181,7 +181,7 @@ async function initLicensing() {
 }
 
 async function verifyKeyProcess(key, isAutoLogin = false) {
-    if (!isAutoLogin) showLoginMsg("Đang kết nối Server kiểm tra Key...", "#ffb74d");
+    if (!isAutoLogin) showLoginMsg("Đang kết nối Server kiểm tra Key...", "var(--warning)");
 
     try {
         // Tải config.json từ Gist (Thêm tham số thời gian để tránh bị trình duyệt lưu cache)
@@ -228,7 +228,7 @@ async function verifyKeyProcess(key, isAutoLogin = false) {
         // 2. Đồng bộ trạng thái Kích hoạt và IP lên Server (Giống hệt Python)
         if (needsActivation || !isAutoLogin) {
             try {
-                if (!isAutoLogin) showLoginMsg("Đang đồng bộ kích hoạt lên Server...", "#00bcd4");
+                if (!isAutoLogin) showLoginMsg("Đang đồng bộ kích hoạt lên Server...", "var(--primary)");
 
                 // Hàm giải mã Token
                 const decryptToken = (encBase64) => {
@@ -332,7 +332,7 @@ async function verifyKeyProcess(key, isAutoLogin = false) {
             document.getElementById('login-view').style.display = 'block';
             document.getElementById('main-view').style.display = 'none';
         }
-        showLoginMsg(error.message, "#ff5252");
+        showLoginMsg(error.message, "var(--danger)");
         chrome.storage.local.remove(['licenseKey', 'licenseExpiry']); // Xóa key lỗi
     }
 }
@@ -638,8 +638,8 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     const btn = document.getElementById('apply-btn');
     const originalText = btn.textContent;
     btn.textContent = "WAIT...";
-    btn.style.background = "#ffb74d";
-    btn.style.color = "#000";
+    btn.style.background = "var(--warning)";
+    btn.style.color = "var(--btn-hover-text)";
     btn.disabled = true;
 
     // Gọi background xóa sạch Cookie, Cache, Storage trước khi đổi profile
@@ -650,7 +650,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
             // Bắt buộc đợi rules mạng (Header) được cập nhật xong hoàn toàn rồi mới cho phép reload tab
             chrome.runtime.sendMessage({ type: "UPDATE_RULES", profile: profile }, () => {
                 btn.textContent = "Success";
-                btn.style.background = "#00FF41";
+                btn.style.background = "var(--secondary)";
                 btn.disabled = false;
                 setTimeout(() => {
                     btn.textContent = originalText;
@@ -694,6 +694,29 @@ document.getElementById('crypto-btn').addEventListener('click', () => {
         chrome.runtime.sendMessage({
             type: "OPEN_CRYPTO_LOGIN",
             creds: { email: data.cryptoEmail || "", pass: data.cryptoPass || "" }
+        });
+    });
+});
+
+// Quản lý Giao diện Sáng/Tối
+const themeToggleBtn = document.getElementById('theme-toggle');
+chrome.storage.local.get(['lightTheme'], (data) => {
+    if (data.lightTheme) {
+        document.body.classList.add('light-theme');
+        themeToggleBtn.textContent = '🌙';
+    }
+});
+
+themeToggleBtn.addEventListener('click', () => {
+    document.body.classList.toggle('light-theme');
+    const isLight = document.body.classList.contains('light-theme');
+    themeToggleBtn.textContent = isLight ? '🌙' : '🌞';
+    chrome.storage.local.set({ lightTheme: isLight });
+
+    // Đồng bộ theme ngay lập tức xuống mọi tab có Menu Nổi
+    chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+            chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_THEME", isLight: isLight }).catch(() => { });
         });
     });
 });

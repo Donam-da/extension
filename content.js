@@ -29,14 +29,14 @@ if (window.location.hostname === 'cryptolinkforearn.com' && window.location.path
 }
 
 // 1. Ghi nhận tức thời URL (Phòng trường hợp trang web dùng JS Redirect nhảy trang quá nhanh)
-if (window.location.hostname.includes('uptolink') && window.location.pathname.length > 1 && window.location.pathname !== '/') {
+if (window.location.hostname.includes('uptolink') && window.location.pathname.length > 1 && window.location.pathname !== '/' && !window.location.pathname.includes('/finish/')) {
     chrome.storage.local.set({ lastUptoLink: window.location.href });
 }
 
 // 2. Bắt click link nhiệm vụ từ bất kỳ đâu
 document.addEventListener('mousedown', function (e) {
     let target = e.target.closest('a');
-    if (target && target.href && target.href.includes('uptolink.vip') && new URL(target.href).pathname.length > 1) {
+    if (target && target.href && target.href.includes('uptolink.vip') && new URL(target.href).pathname.length > 1 && !new URL(target.href).pathname.includes('/finish/')) {
         chrome.storage.local.set({ lastUptoLink: target.href });
     }
 }, true);
@@ -54,41 +54,81 @@ function injectFloatingMenu() {
 
     const style = document.createElement('style');
     style.textContent = `
+        :host {
+            --menu-bg: #0D1117;
+            --menu-border: #00E5FF;
+            --menu-text: #00E5FF;
+            --menu-panel-bg: #0D1117;
+            --menu-panel-border: #30363d;
+            --menu-title-border: #30363d;
+            --btn-bg: #161b22;
+            --btn-hover-bg: #0D1117;
+            --top-btn-hover: #161b22;
+            --top-btn-text: #8b949e;
+            --top-btn-hover-text: #c9d1d9;
+            --scrollbar-thumb: #30363d;
+            --crypto-color: #B300FF;
+            --close-color: #ff5252;
+            --btn-text: #00E5FF;
+            --pin-active: #00FF41;
+            --fab-shadow: rgba(0, 229, 255, 0.4);
+            --fab-shadow-hover: rgba(0, 229, 255, 0.8);
+        }
+        :host(.light-theme) {
+            --menu-bg: #ffffff;
+            --menu-border: #0277bd;
+            --menu-text: #0277bd;
+            --menu-panel-bg: #f5f8fa;
+            --menu-panel-border: #b0bec5;
+            --menu-title-border: #b0bec5;
+            --btn-bg: #ffffff;
+            --btn-hover-bg: #e1e2e1;
+            --top-btn-hover: #cfd8dc;
+            --top-btn-text: #546e7a;
+            --top-btn-hover-text: #263238;
+            --scrollbar-thumb: #b0bec5;
+            --crypto-color: #6a1b9a;
+            --close-color: #d32f2f;
+            --btn-text: #0277bd;
+            --pin-active: #2e7d32;
+            --fab-shadow: rgba(2, 119, 189, 0.4);
+            --fab-shadow-hover: rgba(2, 119, 189, 0.8);
+        }
         .fab {
-            width: 50px; height: 50px; border-radius: 50%;
-            background: #0D1117; border: 2px solid #00E5FF; color: #00E5FF;
+            width: 25px; height: 25px; border-radius: 50%;
+            background: var(--menu-bg); border: 2px solid var(--menu-border); color: var(--menu-text);
             display: flex; align-items: center; justify-content: center;
-            font-size: 20px; font-weight: bold; cursor: pointer;
-            box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+            font-size: 10px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 0 5px var(--fab-shadow);
             transition: all 0.3s ease; user-select: none;
         }
-        .fab:hover { background: #00E5FF; color: #000; box-shadow: 0 0 15px rgba(0, 229, 255, 0.8); }
+        .fab:hover { background: var(--menu-border); color: #fff; box-shadow: 0 0 8px var(--fab-shadow-hover); }
         .menu-wrapper {
-            position: absolute; bottom: 65px; right: 0;
-            display: none; flex-direction: column; gap: 8px;
+            position: absolute; bottom: 35px; right: 0;
+            display: none; flex-direction: column; gap: 4px;
         }
         .menu-wrapper.show { display: flex; }
         .panel {
-            width: 180px; background: #0D1117; border: 1px solid #30363d;
-            border-radius: 8px; padding: 10px; display: flex;
-            flex-direction: column; gap: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            width: 100px; background: var(--menu-panel-bg); border: 1px solid var(--menu-panel-border);
+            border-radius: 6px; padding: 6px; display: flex;
+            flex-direction: column; gap: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
-        .title { display: flex; justify-content: space-between; align-items: center; color: #00FF41; font-size: 12px; font-weight: bold; border-bottom: 1px dashed #30363d; padding-bottom: 5px; margin-bottom: 5px; }
-        .top-btn { cursor: pointer; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-family: Consolas, monospace; transition: all 0.2s; color: #8b949e; user-select: none; }
-        .top-btn:hover { background: #161b22; color: #c9d1d9; }
+        .title { display: flex; justify-content: space-between; align-items: center; color: var(--pin-active); font-size: 8px; font-weight: bold; border-bottom: 1px dashed var(--menu-title-border); padding-bottom: 4px; margin-bottom: 4px; }
+        .top-btn { cursor: pointer; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-family: Consolas, monospace; transition: all 0.2s; color: var(--top-btn-text); user-select: none; }
+        .top-btn:hover { background: var(--top-btn-hover); color: var(--top-btn-hover-text); }
         .btn {
-            background: #161b22; color: #00E5FF; border: 1px solid #30363d;
-            padding: 8px; border-radius: 4px; cursor: pointer;
-            font-size: 11px; font-family: Consolas, monospace; font-weight: bold;
+            background: var(--btn-bg); color: var(--btn-text); border: 1px solid var(--menu-panel-border);
+            padding: 5px; border-radius: 3px; cursor: pointer;
+            font-size: 8px; font-family: Consolas, monospace; font-weight: bold;
             text-transform: uppercase; transition: all 0.2s;
         }
-        .btn:hover { border-color: #00E5FF; background: #0D1117; }
-        .btn.crypto { color: #B300FF; border-color: #B300FF; }
-        .btn.crypto:hover { background: #B300FF; color: #fff; }
-        .btn.close { color: #ff5252; border-color: #ff5252; }
-        .btn.close:hover { background: #ff5252; color: #000; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+        .btn:hover { border-color: var(--btn-text); background: var(--btn-hover-bg); }
+        .btn.crypto { color: var(--crypto-color); border-color: var(--crypto-color); }
+        .btn.crypto:hover { background: var(--crypto-color); color: #fff; }
+        .btn.close { color: var(--close-color); border-color: var(--close-color); }
+        .btn.close:hover { background: var(--close-color); color: #fff; }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
     `;
 
     const wrapper = document.createElement('div');
@@ -96,7 +136,7 @@ function injectFloatingMenu() {
     wrapper.innerHTML = `
         <div class="panel" id="main-panel">
             <div class="title">
-                <span id="btn-refresh" class="top-btn" title="Tải lại trang" style="color: #00E5FF;">F5</span>
+                <span id="btn-refresh" class="top-btn" title="Tải lại trang" style="color: var(--btn-text);">REFRESH</span>
                 <span id="btn-pin-menu" class="top-btn" title="Ghim menu nổi này">Ghim</span>
             </div>
             <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
@@ -145,15 +185,15 @@ function injectFloatingMenu() {
 
     function adjustMenuPosition() {
         const rect = container.getBoundingClientRect();
-        if (rect.top < 250) {
+        if (rect.top < 150) {
             wrapper.style.bottom = 'auto';
-            wrapper.style.top = '65px';
+            wrapper.style.top = '35px';
         } else {
             wrapper.style.top = 'auto';
-            wrapper.style.bottom = '65px';
+            wrapper.style.bottom = '35px';
         }
 
-        if (rect.left < 220) {
+        if (rect.left < 120) {
             wrapper.style.right = 'auto';
             wrapper.style.left = '0';
         } else {
@@ -231,22 +271,45 @@ function injectFloatingMenu() {
         }
     });
 
+    const pinBtn = wrapper.querySelector('#btn-pin-menu');
+
     fab.addEventListener('click', (e) => {
         if (hasDragged) {
             e.preventDefault();
             return;
         }
         adjustMenuPosition();
-        wrapper.classList.toggle('show');
+        if (wrapper.classList.contains('show')) {
+            wrapper.classList.remove('show');
+            chrome.storage.local.get(['isMenuPinned'], (data) => {
+                if (data.isMenuPinned) {
+                    chrome.storage.local.set({ isMenuPinned: false }, () => {
+                        pinBtn.style.color = '';
+                        pinBtn.title = "Ghim menu nổi này";
+                    });
+                }
+            });
+        } else {
+            wrapper.classList.add('show');
+        }
     });
-
-    const pinBtn = wrapper.querySelector('#btn-pin-menu');
 
     chrome.storage.local.get(['isMenuPinned'], (data) => {
         if (data.isMenuPinned) {
             wrapper.classList.add('show');
-            pinBtn.style.color = '#00FF41';
+            pinBtn.style.color = 'var(--pin-active)';
             setTimeout(adjustMenuPosition, 50);
+        }
+    });
+
+    chrome.storage.local.get(['lightTheme'], (data) => {
+        if (data.lightTheme) container.classList.add('light-theme');
+    });
+
+    chrome.runtime.onMessage.addListener((message) => {
+        if (message.type === "TOGGLE_THEME") {
+            if (message.isLight) container.classList.add('light-theme');
+            else container.classList.remove('light-theme');
         }
     });
 
@@ -256,7 +319,7 @@ function injectFloatingMenu() {
             const newState = !data.isMenuPinned;
             chrome.storage.local.set({ isMenuPinned: newState }, () => {
                 if (newState) {
-                    pinBtn.style.color = '#00FF41';
+                    pinBtn.style.color = 'var(--pin-active)';
                     pinBtn.title = "Đã ghim (Sẽ tự động mở ở trang mới)";
                 } else {
                     pinBtn.style.color = '';
@@ -273,7 +336,10 @@ function injectFloatingMenu() {
 
     wrapper.querySelector('#btn-change-task').addEventListener('click', () => {
         chrome.storage.local.get(['lastUptoLink'], (data) => {
-            const backUrl = data.lastUptoLink || 'https://uptolink.vip';
+            let backUrl = data.lastUptoLink || 'https://uptolink.vip';
+            if (backUrl.includes('/finish/')) {
+                backUrl = 'https://uptolink.vip';
+            }
             window.location.href = backUrl;
             try {
                 const a = document.createElement('a');
@@ -299,6 +365,9 @@ else injectFloatingMenu();
 
 chrome.storage.local.get(['lastUptoLink'], (data) => {
     let lastLink = data.lastUptoLink || 'https://uptolink.vip';
+    if (lastLink.includes('/finish/')) {
+        lastLink = 'https://uptolink.vip';
+    }
 
     chrome.runtime.sendMessage({ type: "GET_VALIDATED_PROFILE" }, (response) => {
         if (!response || !response.profile) return;

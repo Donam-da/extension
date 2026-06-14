@@ -17,6 +17,27 @@
             --purple: #B300FF;
             --panel-bg: rgba(13, 20, 36, 0.8);
             --border: #1f2937;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --input-bg: rgba(0, 0, 0, 0.4);
+            --btn-hover-text: #000;
+        }
+
+        body.light-theme {
+            --bg-color: #f0f4f8;
+            --grid-color: rgba(0, 150, 255, 0.1);
+            --primary: #0277bd;
+            --primary-glow: rgba(2, 119, 189, 0.4);
+            --secondary: #2e7d32;
+            --danger: #c62828;
+            --warning: #ef6c00;
+            --purple: #6a1b9a;
+            --panel-bg: rgba(255, 255, 255, 0.85);
+            --border: #b0bec5;
+            --text-main: #263238;
+            --text-muted: #546e7a;
+            --input-bg: rgba(255, 255, 255, 0.9);
+            --btn-hover-text: #fff;
         }
 
         body {
@@ -26,7 +47,7 @@
                 linear-gradient(var(--grid-color) 1px, transparent 1px),
                 linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
             background-size: 15px 15px;
-            color: #c9d1d9;
+            color: var(--text-main);
             width: 100%;
             min-width: 360px;
             box-sizing: border-box;
@@ -89,7 +110,7 @@
         }
 
         .label {
-            color: #8b949e;
+            color: var(--text-muted);
             font-size: 11px;
             margin-bottom: 5px;
             font-weight: bold;
@@ -141,7 +162,7 @@
 
         button:hover {
             background: var(--primary);
-            color: #000;
+            color: var(--btn-hover-text);
             box-shadow: 0 0 15px var(--primary-glow);
             transform: translateY(-2px);
         }
@@ -151,7 +172,7 @@
         select {
             width: 100%;
             padding: 12px;
-            background: rgba(0, 0, 0, 0.4);
+            background: var(--input-bg);
             color: var(--primary);
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -176,12 +197,12 @@
         }
 
         optgroup {
-            background: #090e17;
+            background: var(--bg-color);
             color: var(--warning);
         }
 
         option {
-            background: #090e17;
+            background: var(--bg-color);
             color: var(--secondary);
         }
 
@@ -196,7 +217,7 @@
 
         #btn-copy-hwid:hover {
             background: var(--warning);
-            color: #000;
+            color: var(--btn-hover-text);
             box-shadow: 0 0 15px rgba(255, 183, 77, 0.4);
         }
 
@@ -233,7 +254,7 @@
 
         #apply-btn:hover {
             background: var(--secondary);
-            color: #000;
+            color: var(--btn-hover-text);
             box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
         }
 
@@ -267,7 +288,7 @@
 
         #crypto-settings-btn:hover {
             background: var(--warning);
-            color: #000;
+            color: var(--btn-hover-text);
             box-shadow: 0 0 15px rgba(255, 183, 77, 0.4);
         }
 
@@ -285,7 +306,7 @@
 
         #save-crypto-btn:hover {
             background: var(--secondary);
-            color: #000;
+            color: var(--btn-hover-text);
             box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
         }
 
@@ -318,11 +339,34 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--primary);
         }
+
+        #theme-toggle {
+            width: auto;
+            background: none;
+            border: none;
+            padding: 5px;
+            box-shadow: none;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 100;
+        }
+
+        #theme-toggle::before {
+            display: none;
+        }
+
+        #theme-toggle:hover {
+            background: none;
+            box-shadow: none;
+            transform: scale(1.1);
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
+        <button id="theme-toggle" title="Chuyển đổi Sáng/Tối">🌞</button>
         <!-- MÀN HÌNH ĐĂNG NHẬP -->
         <div id="login-view" style="display: none;">
             <div class="header">
@@ -362,36 +406,15 @@
                     style="color: var(--primary); font-size: 12px; margin-top: 10px; font-weight: bold;">
                     ⏳ Hạn Key: Đang tải...
                 </div>
-                <div id="ip-info-display"
-                    style="color: #8b949e; font-size: 10px; margin-top: 12px; text-align: left; background: rgba(0,0,0,0.3); padding: 8px 10px; border-radius: 6px; border: 1px dashed #374151; display: none; line-height: 1.6;">
-                    <div style="display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center;">
-                        <span>IPv4 now:</span> <span id="ipv4-current"
-                            style="color:var(--secondary); word-break: break-all;">Đang tải...</span>
-                        <span>IPv4 old:</span> <span id="ipv4-old"
-                            style="color:var(--warning); word-break: break-all;">Trống</span>
-                        <span>IPv6 now:</span> <span id="ipv6-current"
-                            style="color:var(--primary); word-break: break-all;">Đang tải...</span>
-                        <span>IPv6 old:</span> <span id="ipv6-old"
-                            style="color:var(--warning); word-break: break-all;">Trống</span>
-                    </div>
-                </div>
             </div>
 
             <div class="box">
                 <label class="label" style="display:block; margin-bottom: 8px;">&gt; Lựa chọn:</label>
                 <select id="profile-select">
-                    <optgroup label="[ Loại 1: All Browser ]">
-                        <option value="random">Random 1</option>
-                    </optgroup>
-                    <optgroup label="[ Loại 2: Only Chrome ]">
-                        <option value="random_noise">Random 2</option>
-                    </optgroup>
-                    <optgroup label="[ Loại 3: Desktop PC ]">
-                        <option value="windows_pc">Windows PC (Máy tính)</option>
-                    </optgroup>
-                    <optgroup label="[ Loại 4: Kiwi / Mobile ]">
-                        <option value="random_kiwi">Random 4 (Kiwi/Mobile chuẩn)</option>
-                    </optgroup>
+                    <option value="random">Type 1 - ALL Browser</option>
+                    <option value="random_noise">Type 2 - Only Chrome</option>
+                    <option value="windows_pc">Type 3 - Desktop PC</option>
+                    <option value="random_kiwi">Type 4 - Kiwi / Mobile</option>
                 </select>
             </div>
 
