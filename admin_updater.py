@@ -4,7 +4,7 @@ import requests
 import zipfile
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, filedialog
+from tkinter import messagebox, scrolledtext, filedialog
 
 # ID của Gist chứa file config.json của bạn
 GIST_ID = "f7c09d917d09209b818bab60c42f2ca3"
@@ -17,58 +17,99 @@ class AdminUpdaterGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Quản Lý Cập Nhật Extension VIP")
-        self.root.geometry("620x580")
+        self.root.geometry("700x780")
+        self.root.configure(bg="#0D1117")
+        self.root.resizable(False, False)
         
-        style = ttk.Style()
-        try: style.theme_use('clam')
-        except: pass
+        # --- THIẾT LẬP GIAO DIỆN (THEME) ---
+        bg_main = "#0D1117"
+        bg_panel = "#161b22"
+        fg_text = "#c9d1d9"
+        border_col = "#30363d"
+        font_title = ("Segoe UI", 11, "bold")
+        font_normal = ("Segoe UI", 10)
+        font_code = ("Consolas", 10)
         
-        # --- TOP FRAME: THÔNG TIN ---
-        frame_info = ttk.LabelFrame(root, text=" Cấu hình & Phiên bản ", padding=10)
-        frame_info.pack(fill="x", padx=10, pady=10)
+        def create_panel(parent, title):
+            panel = tk.Frame(parent, bg=bg_panel, highlightbackground=border_col, highlightthickness=1)
+            title_frame = tk.Frame(panel, bg="#21262d")
+            title_frame.pack(fill="x")
+            lbl = tk.Label(title_frame, text=title, bg="#21262d", fg="#58a6ff", font=font_title, anchor="w")
+            lbl.pack(side="left", padx=15, pady=8)
+            content = tk.Frame(panel, bg=bg_panel)
+            content.pack(fill="both", expand=True, padx=20, pady=15)
+            return panel, content
+            
+        def create_button(parent, text, command, bg="#1f6feb", hover_bg="#388bfd", fg="#ffffff", font=font_normal):
+            btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg, font=font,
+                            relief="flat", cursor="hand2", activebackground=hover_bg, activeforeground=fg, bd=0, padx=15, pady=6)
+            btn.bind("<Enter>", lambda e: btn.config(bg=hover_bg) if btn['state'] != 'disabled' else None)
+            btn.bind("<Leave>", lambda e: btn.config(bg=bg) if btn['state'] != 'disabled' else None)
+            return btn
+            
+        def create_entry(parent, width=50):
+            frame = tk.Frame(parent, bg=bg_main, highlightbackground=border_col, highlightthickness=1)
+            entry = tk.Entry(frame, bg=bg_main, fg=fg_text, font=font_normal, relief="flat", insertbackground=fg_text, width=width)
+            entry.pack(fill="both", expand=True, padx=8, pady=6)
+            return frame, entry
+
+        # --- HEADER ---
+        header_frame = tk.Frame(root, bg=bg_main)
+        header_frame.pack(fill="x", pady=(20, 10))
+        tk.Label(header_frame, text="HỆ THỐNG PHÁT HÀNH BẢN CẬP NHẬT", bg=bg_main, fg="#00E5FF", font=("Segoe UI", 16, "bold")).pack()
+        tk.Label(header_frame, text="Quản lý và đẩy phiên bản mới cho người dùng", bg=bg_main, fg="#8b949e", font=("Segoe UI", 10)).pack()
         
-        ttk.Label(frame_info, text="Mã Token GitHub:").grid(row=0, column=0, sticky="w", pady=5)
-        self.token_entry = ttk.Entry(frame_info, width=50)
-        self.token_entry.grid(row=0, column=1, padx=5, pady=5)
+        # --- PANEL 1: THÔNG TIN ---
+        panel1, p1_content = create_panel(root, "Cấu hình & Phiên bản")
+        panel1.pack(fill="x", padx=25, pady=10)
         
-        self.btn_save_token = ttk.Button(frame_info, text="Lưu Token", command=self.save_token)
-        self.btn_save_token.grid(row=0, column=2, padx=5, pady=5)
+        p1_content.columnconfigure(1, weight=1)
         
-        ttk.Label(frame_info, text="Phiên bản hiện tại:").grid(row=1, column=0, sticky="w", pady=5)
-        self.lbl_current_version = ttk.Label(frame_info, text="Đang tải...", foreground="blue", font=("", 10, "bold"))
-        self.lbl_current_version.grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        tk.Label(p1_content, text="Mã Token GitHub:", bg=bg_panel, fg=fg_text, font=font_normal).grid(row=0, column=0, sticky="w", pady=8)
+        _, self.token_entry = create_entry(p1_content, width=40)
+        _.grid(row=0, column=1, padx=(15, 10), pady=8, sticky="we")
+        self.btn_save_token = create_button(p1_content, "Lưu Token", self.save_token)
+        self.btn_save_token.grid(row=0, column=2, sticky="e")
         
-        ttk.Label(frame_info, text="Phiên bản MỚI:").grid(row=2, column=0, sticky="w", pady=5)
-        self.new_version_entry = ttk.Entry(frame_info, width=20)
-        self.new_version_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        tk.Label(p1_content, text="Phiên bản hiện tại:", bg=bg_panel, fg=fg_text, font=font_normal).grid(row=1, column=0, sticky="w", pady=8)
+        self.lbl_current_version = tk.Label(p1_content, text="Đang tải...", bg=bg_panel, fg="#00FF41", font=("Segoe UI", 11, "bold"))
+        self.lbl_current_version.grid(row=1, column=1, sticky="w", padx=15, pady=8)
         
-        ttk.Label(frame_info, text="File ZIP tải lên:").grid(row=3, column=0, sticky="w", pady=5)
-        frame_zip = ttk.Frame(frame_info)
-        frame_zip.grid(row=3, column=1, columnspan=2, sticky="we", padx=5)
+        tk.Label(p1_content, text="Phiên bản MỚI:", bg=bg_panel, fg=fg_text, font=font_normal).grid(row=2, column=0, sticky="w", pady=8)
+        _, self.new_version_entry = create_entry(p1_content, width=20)
+        _.grid(row=2, column=1, sticky="w", padx=(15, 10), pady=8)
         
-        self.zip_path_entry = ttk.Entry(frame_zip, width=38)
-        self.zip_path_entry.pack(side="left", fill="x", expand=True)
+        tk.Label(p1_content, text="File ZIP tải lên:", bg=bg_panel, fg=fg_text, font=font_normal).grid(row=3, column=0, sticky="w", pady=8)
+        frame_zip = tk.Frame(p1_content, bg=bg_panel)
+        frame_zip.grid(row=3, column=1, columnspan=2, sticky="we", padx=(15, 0), pady=8)
         
-        self.btn_browse = ttk.Button(frame_zip, text="Chọn File", command=self.browse_zip)
-        self.btn_browse.pack(side="left", padx=(5, 0))
+        _, self.zip_path_entry = create_entry(frame_zip, width=32)
+        _.pack(side="left", fill="x", expand=True)
+        self.btn_browse = create_button(frame_zip, "Chọn File", self.browse_zip, bg="#238636", hover_bg="#2ea043")
+        self.btn_browse.pack(side="left", padx=(10, 0))
         
         # --- MIDDLE FRAME: GHI CHÚ ---
-        frame_notes = ttk.LabelFrame(root, text=" Ghi chú cập nhật (Sẽ hiện trên màn hình khách) ", padding=10)
-        frame_notes.pack(fill="x", padx=10, pady=5)
+        panel2, p2_content = create_panel(root, "Ghi chú cập nhật (Sẽ hiện trên màn hình khách)")
+        panel2.pack(fill="x", padx=25, pady=5)
         
-        self.notes_text = tk.Text(frame_notes, height=4, width=65, font=("Consolas", 10))
-        self.notes_text.pack(fill="x")
+        frame_text = tk.Frame(p2_content, bg=bg_main, highlightbackground=border_col, highlightthickness=1)
+        frame_text.pack(fill="x")
+        self.notes_text = tk.Text(frame_text, height=4, font=font_code, bg=bg_main, fg=fg_text, relief="flat", insertbackground=fg_text)
+        self.notes_text.pack(fill="x", padx=8, pady=8)
         
         # --- ACTION BUTTON ---
-        self.btn_release = tk.Button(root, text="🚀 PHÁT HÀNH BẢN CẬP NHẬT", bg="#E53935", fg="white", font=("Arial", 12, "bold"), height=2, cursor="hand2", command=self.start_update)
-        self.btn_release.pack(fill="x", padx=10, pady=10)
+        self.btn_release = create_button(root, "🚀 PHÁT HÀNH BẢN CẬP NHẬT", self.start_update, bg="#E53935", hover_bg="#ef5350", font=("Segoe UI", 13, "bold"))
+        self.btn_release.config(pady=12)
+        self.btn_release.pack(fill="x", padx=25, pady=10)
         
         # --- BOTTOM FRAME: LOG ---
-        frame_log = ttk.LabelFrame(root, text=" Nhật ký hệ thống ", padding=5)
-        frame_log.pack(fill="both", expand=True, padx=10, pady=5)
+        panel3, p3_content = create_panel(root, "Nhật ký hệ thống")
+        panel3.pack(fill="both", expand=True, padx=25, pady=(5, 25))
         
-        self.log_area = scrolledtext.ScrolledText(frame_log, height=10, bg="#0D1117", fg="#00FF41", font=("Consolas", 9))
-        self.log_area.pack(fill="both", expand=True)
+        frame_log = tk.Frame(p3_content, bg=bg_main, highlightbackground=border_col, highlightthickness=1)
+        frame_log.pack(fill="both", expand=True)
+        self.log_area = scrolledtext.ScrolledText(frame_log, height=8, bg=bg_main, fg="#00FF41", font=font_code, relief="flat", insertbackground=fg_text)
+        self.log_area.pack(fill="both", expand=True, padx=5, pady=5)
         
         self.load_initial_data()
         

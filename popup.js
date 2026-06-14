@@ -107,16 +107,29 @@ async function checkForUpdates() {
         if (extConfig.latest_version && isNewerVersion(extConfig.latest_version, currentVersion)) {
             // Xoá giao diện hiện tại, hiển thị thông báo khóa App
             document.body.innerHTML = `
-                <div style="padding: 20px; text-align: center; font-family: Consolas, monospace; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; background: #0D1117;">
-                    <h2 style="color: #ff5252; margin-top: 0;">⚠️ YÊU CẦU CẬP NHẬT</h2>
-                    <p style="color: #ffb74d; margin: 5px 0;">Phiên bản hiện tại: v${currentVersion}</p>
-                    <p style="color: #00FF41; margin: 5px 0;">Phiên bản mới nhất: v${extConfig.latest_version}</p>
-                    <div style="margin: 15px 0; padding: 10px; background: #161b22; border: 1px dashed #30363d; border-radius: 5px; color: #c9d1d9; font-size: 13px; text-align: left; white-space: pre-wrap;">${extConfig.update_message || "Đã có bản cập nhật mới. Vui lòng tải về để tiếp tục sử dụng!"}</div>
-                    <button id="btn-do-update" style="background: #00E5FF; color: #000; border: none; padding: 12px 20px; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 10px; text-transform: uppercase;">
+                <div style="padding: 30px; text-align: center; font-family: 'Consolas', monospace; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #090e17; background-image: linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px); background-size: 15px 15px; color: #c9d1d9;">
+                    <div style="background: rgba(13, 20, 36, 0.8); border: 1px solid #1f2937; border-left: 4px solid #FF0055; border-radius: 8px; padding: 25px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(5px);">
+                        <h2 style="color: #FF0055; margin: 0 0 15px; font-size: 20px; letter-spacing: 1px; text-shadow: 0 0 10px rgba(255,0,85,0.4);">⚠️ YÊU CẦU CẬP NHẬT</h2>
+                        <div style="display: flex; justify-content: space-between; background: rgba(0,0,0,0.4); border: 1px solid #1f2937; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px;">
+                            <div style="text-align: left;">
+                                <div style="color: #8b949e; font-size: 11px; margin-bottom: 5px;">Phiên bản hiện tại:</div>
+                                <div style="color: #ffb74d; font-weight: bold; text-shadow: 0 0 5px rgba(255, 183, 77, 0.4);">v${currentVersion}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: #8b949e; font-size: 11px; margin-bottom: 5px;">Phiên bản mới nhất:</div>
+                                <div style="color: #00FF41; font-weight: bold; text-shadow: 0 0 5px rgba(0, 255, 65, 0.4);">v${extConfig.latest_version}</div>
+                            </div>
+                        </div>
+                        <div style="margin: 0 0 20px; padding: 12px; background: rgba(0, 229, 255, 0.05); border-left: 3px solid #00E5FF; color: #e0f2fe; font-size: 12px; text-align: left; white-space: pre-wrap; line-height: 1.5;">${extConfig.update_message || "Đã có bản cập nhật mới. Vui lòng tải về để tiếp tục sử dụng!"}</div>
+                        <button id="btn-do-update" style="background: rgba(0, 229, 255, 0.1); color: #00E5FF; border: 1px solid #00E5FF; padding: 12px 20px; font-size: 14px; font-family: 'Consolas', monospace; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; transition: all 0.3s;">
                         Tải Bản Cập Nhật Ngay
                     </button>
+                    </div>
                 </div>
             `;
+            const btn = document.getElementById('btn-do-update');
+            btn.addEventListener('mouseover', () => { btn.style.background = '#00E5FF'; btn.style.color = '#000'; btn.style.boxShadow = '0 0 15px rgba(0, 229, 255, 0.5)'; btn.style.transform = 'translateY(-2px)'; });
+            btn.addEventListener('mouseout', () => { btn.style.background = 'rgba(0, 229, 255, 0.1)'; btn.style.color = '#00E5FF'; btn.style.boxShadow = 'none'; btn.style.transform = 'translateY(0)'; });
             document.getElementById('btn-do-update').addEventListener('click', () => {
                 window.open(extConfig.update_link, '_blank');
             });
