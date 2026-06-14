@@ -455,7 +455,8 @@ function generateRandomProfile() {
         screenHeight: h,
         dsf: [2.0, 2.25, 2.5, 2.75, 3.0, 3.5][Math.floor(Math.random() * 6)],
         webglVendor: "Qualcomm",
-        webglRenderer: "Adreno (TM) " + ["610", "618", "620", "640", "650", "730", "740", "750"][Math.floor(Math.random() * 8)]
+        webglRenderer: "Adreno (TM) " + ["610", "618", "620", "640", "650", "730", "740", "750"][Math.floor(Math.random() * 8)],
+        fullChromeVer: fullChromeVer
     };
 }
 
@@ -495,8 +496,8 @@ function generateStandardChromeProfile() {
     let fullChromeVer = "";
     let chromeMajor = "128";
     if (realUaMatch) {
-        chromeMajor = realUaMatch[1].split('.')[0];
-        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
+        fullChromeVer = realUaMatch[1];
+        chromeMajor = fullChromeVer.split('.')[0];
     } else {
         chromeMajor = (Math.floor(Math.random() * 10) + 120).toString();
         fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
@@ -514,7 +515,8 @@ function generateStandardChromeProfile() {
         screenHeight: [850, 873, 892, 915][Math.floor(Math.random() * 4)],
         dsf: [2.0, 2.5, 3.0, 3.5][Math.floor(Math.random() * 4)],
         webglVendor: vendor,
-        webglRenderer: gpu
+        webglRenderer: gpu,
+        fullChromeVer: fullChromeVer
     };
 }
 
@@ -544,6 +546,7 @@ function generateWindowsProfile() {
         screenHeight: h,
         dsf: [1.0, 1.25, 1.5][Math.floor(Math.random() * 3)]
         // CHÚ Ý: Cố tình KHÔNG truyền webglVendor và webglRenderer để lấy GPU thật của PC vượt Cloudflare
+        , fullChromeVer: fullChromeVer
     };
 }
 
@@ -588,7 +591,8 @@ function generateKiwiProfile() {
         dsf: [2.0, 2.25, 2.5, 2.75, 3.0, 3.5][Math.floor(Math.random() * 6)],
         webglVendor: vendor,
         webglRenderer: gpu,
-        isKiwi: true
+        isKiwi: true,
+        fullChromeVer: fullChromeVer
     };
 }
 
@@ -610,6 +614,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
         const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
         profile.ua = profile.ua.replace(/Chrome\/\d+\.0\.0\.0/, `Chrome/${fullChromeVer}`);
         profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${chromeMajor}`);
+        profile.fullChromeVer = fullChromeVer;
     }
 
     // Luôn luôn tạo nhiễu ngẫu nhiên để đảm bảo mỗi lần ấn tạo là ra một máy hoàn toàn độc nhất

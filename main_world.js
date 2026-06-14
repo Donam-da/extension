@@ -1,3 +1,76 @@
+// =====================================================================
+// LỚP PHÒNG NGỰ ĐỒNG BỘ (SYNCHRONOUS DEFENSE) - CHẠY NGAY LẬP TỨC
+// Ngăn chặn các trang web dùng inline script để bắt bài trước khi
+// Extension kịp nhận được Profile từ background.
+// =====================================================================
+(function syncPreSpoof() {
+    try {
+        const sanitizeWindow = (win) => {
+            try {
+                // 1. Tiêu diệt tức thời các dấu vết của trình duyệt Extension
+                const badVars = ['lemur', 'LemurApp', 'KiwiExtension', 'browser'];
+                for (let v of badVars) { try { delete win[v]; } catch (e) { } }
+
+                // 2. Định nghĩa lại window.chrome chỉ chứa csi và loadTimes (Chuẩn Chrome Mobile)
+                if (win.chrome) {
+                    let fakeChrome = {};
+                    if (win.chrome.csi) fakeChrome.csi = win.chrome.csi;
+                    if (win.chrome.loadTimes) fakeChrome.loadTimes = win.chrome.loadTimes;
+                    try { Object.defineProperty(win, 'chrome', { value: fakeChrome, writable: true, configurable: true, enumerable: true }); } catch (e) { }
+                }
+
+                // 3. Xóa Plugins và MimeTypes nếu đang ở giao diện Mobile
+                if (/Android|Mobile/i.test(win.navigator.userAgent)) {
+                    try { Object.defineProperty(win.navigator, 'plugins', { get: () => [], configurable: true }); } catch (e) { }
+                    try { Object.defineProperty(win.navigator, 'mimeTypes', { get: () => [], configurable: true }); } catch (e) { }
+                }
+
+                // 4. Khóa Webdriver
+                try { Object.defineProperty(win.navigator, 'webdriver', { get: () => false, configurable: true }); } catch (e) { }
+            } catch (e) { }
+        };
+
+        sanitizeWindow(window);
+
+        // Bảo vệ Iframe (Nếu web tạo Iframe bằng JS để luồn qua hệ thống check)
+        if (window.HTMLIFrameElement && window.HTMLIFrameElement.prototype) {
+            const iframeWinDesc = Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentWindow');
+            if (iframeWinDesc && iframeWinDesc.get) {
+                const origGet = iframeWinDesc.get;
+                Object.defineProperty(window.HTMLIFrameElement.prototype, 'contentWindow', {
+                    get: function () {
+                        const win = origGet.call(this);
+                        if (win) sanitizeWindow(win);
+                        return win;
+                    },
+                    configurable: true, enumerable: true
+                });
+            }
+        }
+
+        // 5. Cầm chân Cloudflare/Turnstile: Bắt Promise của nó phải chờ cho đến khi Profile tải xong!
+        if (navigator.userAgentData) {
+            const origGetHighEntropyValues = navigator.userAgentData.getHighEntropyValues;
+            window._isProfileReady = false;
+
+            navigator.userAgentData.getHighEntropyValues = function (hints) {
+                if (!window._isProfileReady) {
+                    return new Promise((resolve) => {
+                        const waitInterval = setInterval(() => {
+                            if (window._isProfileReady) {
+                                clearInterval(waitInterval);
+                                resolve(navigator.userAgentData.getHighEntropyValues(hints));
+                            }
+                        }, 5);
+                    });
+                }
+                return origGetHighEntropyValues.call(this, hints);
+            };
+        }
+    } catch (e) { }
+})();
+// =====================================================================
+
 window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     let profile = e.detail;
     if (typeof profile === 'string') {
@@ -254,12 +327,19 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             // 6. Fake window.chrome
             if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
                 try {
-                    // KHÔNG ĐƯỢC XÓA TOÀN BỘ targetWin.chrome vì Chrome Mobile thật vẫn có đối tượng này!
-                    // Quét và xóa TẤT CẢ các API của Extension, chỉ chừa lại csi và loadTimes chuẩn của Chrome Mobile.
+                    try { delete targetWin.browser; } catch (e) { }
                     if (targetWin.chrome) {
-                        for (let key in targetWin.chrome) {
-                            if (key !== 'csi' && key !== 'loadTimes') {
-                                try { delete targetWin.chrome[key]; } catch (e) { }
+                        const extKeys = ['runtime', 'extension', 'app', 'webstore', 'management', 'tabs', 'windows', 'storage', 'identity', 'alarms'];
+                        for (let key of extKeys) {
+                            try { delete targetWin.chrome[key]; } catch (e) { }
+                            try { Object.defineProperty(targetWin.chrome, key, { get: undefined, set: undefined, value: undefined, configurable: true, enumerable: false }); } catch (e) { }
+                        }
+
+                        const chromeProto = Object.getPrototypeOf(targetWin.chrome);
+                        if (chromeProto && chromeProto !== Object.prototype) {
+                            for (let key of extKeys) {
+                                try { delete chromeProto[key]; } catch (e) { }
+                                try { Object.defineProperty(chromeProto, key, { get: undefined, set: undefined, value: undefined, configurable: true, enumerable: false }); } catch (e) { }
                             }
                         }
                     }
@@ -270,6 +350,7 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             if (targetWin.navigator && targetWin.navigator.userAgentData && !profile.skipUaFake) {
                 let brandName = "Google Chrome";
                 let brandVer = profile.chromeMajor;
+                let fullBrandVer = profile.fullChromeVer || `${profile.chromeMajor}.0.0.0`;
 
                 if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
                     brandName = "Microsoft Edge";
@@ -285,8 +366,13 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                     { brand: "Not/A)Brand", version: "8" },
                     { brand: "Chromium", version: profile.chromeMajor }
                 ];
+                let fakeFullBrands = [
+                    { brand: "Not/A)Brand", version: "8.0.0.0" },
+                    { brand: "Chromium", version: fullBrandVer }
+                ];
                 if (!profile.isKiwi) {
                     fakeBrands.push({ brand: brandName, version: brandVer });
+                    fakeFullBrands.push({ brand: brandName, version: fullBrandVer });
                 }
                 let fakePlatform = profile.platform.includes("Win") ? "Windows" : profile.platform;
                 if (profile.platform.includes("Linux") && profile.ua.includes("Android")) fakePlatform = "Android";
@@ -310,13 +396,13 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                         return originalGetHighEntropyValues.call(this, hints).then(values => {
                             let fakeValues = { ...values };
                             if (hints.includes("brands")) fakeValues.brands = fakeBrands;
-                            if (hints.includes("fullVersionList")) fakeValues.fullVersionList = fakeBrands;
+                            if (hints.includes("fullVersionList")) fakeValues.fullVersionList = fakeFullBrands;
                             if (hints.includes("platform")) fakeValues.platform = fakePlatform;
                             if (hints.includes("mobile")) fakeValues.mobile = profile.ua.includes("Mobile");
                             if (hints.includes("model")) fakeValues.model = fakeModel;
                             if (hints.includes("platformVersion")) fakeValues.platformVersion = fakePlatformVersion;
                             if (hints.includes("architecture")) fakeValues.architecture = profile.platform.includes("Win") ? "x86" : "arm";
-                            if (hints.includes("bitness")) fakeValues.bitness = "64";
+                            if (hints.includes("bitness")) fakeValues.bitness = profile.platform.includes("Win") ? "64" : "";
                             return fakeValues;
                         });
                     }
@@ -431,5 +517,6 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     }
 
     applySpoofing(window);
+    window._isProfileReady = true; // Mở khóa cho Promise của Cloudflare tiếp tục chạy
 
 }, { once: true });

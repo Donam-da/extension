@@ -9,7 +9,8 @@
         "declarativeNetRequestWithHostAccess",
         "scripting",
         "browsingData",
-        "privacy"
+        "privacy",
+        "history"
     ],
     "host_permissions": [
         "<all_urls>"

@@ -31,17 +31,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
 
             let secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Google Chrome";v="${profile.chromeMajor}"`;
+            let secChUaFull = `"Not/A)Brand";v="8.0.0.0", "Chromium";v="${profile.fullChromeVer || profile.chromeMajor + '.0.0.0'}", "Google Chrome";v="${profile.fullChromeVer || profile.chromeMajor + '.0.0.0'}"`;
+
             if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
                 secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Microsoft Edge";v="${profile.chromeMajor}"`;
+                secChUaFull = `"Not/A)Brand";v="8.0.0.0", "Chromium";v="${profile.fullChromeVer || profile.chromeMajor + '.0.0.0'}", "Microsoft Edge";v="${profile.fullChromeVer || profile.chromeMajor + '.0.0.0'}"`;
             } else if (profile.ua.includes("OPR/")) {
                 secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Opera";v="${profile.chromeMajor}"`;
+                secChUaFull = `"Not/A)Brand";v="8.0.0.0", "Chromium";v="${profile.fullChromeVer || profile.chromeMajor + '.0.0.0'}", "Opera";v="${profile.fullChromeVer || profile.chromeMajor + '.0.0.0'}"`;
             } else if (profile.ua.includes("SamsungBrowser")) {
                 const ssMatch = profile.ua.match(/SamsungBrowser\/(\d+)/);
                 const ssVer = ssMatch ? ssMatch[1] : "20";
                 secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Samsung Internet";v="${ssVer}"`;
+                secChUaFull = `"Not/A)Brand";v="8.0.0.0", "Chromium";v="${profile.fullChromeVer || profile.chromeMajor + '.0.0.0'}", "Samsung Internet";v="${ssVer}.0.0.0"`;
             }
 
             requestHeaders.push({ header: "sec-ch-ua", operation: "set", value: secChUa });
+            requestHeaders.push({ header: "sec-ch-ua-full-version-list", operation: "set", value: secChUaFull });
             requestHeaders.push({ header: "sec-ch-ua-mobile", operation: "set", value: profile.ua.includes("Mobile") ? "?1" : "?0" });
             requestHeaders.push({ header: "sec-ch-ua-platform", operation: "set", value: `"${fakePlatform}"` });
             requestHeaders.push({ header: "sec-ch-ua-model", operation: "set", value: `"${fakeModel}"` });
@@ -68,7 +74,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.type === "CLEAR_BROWSING_DATA") {
         // Xóa sạch toàn bộ Cookie, Cache, LocalStorage để web quên danh tính cũ
         chrome.browsingData.remove({
-            "since": 0
+            "since": 0,
+            "originTypes": {
+                "unprotectedWeb": true,
+                "protectedWeb": true
+            }
         }, {
             "appcache": true,
             "cache": true,
