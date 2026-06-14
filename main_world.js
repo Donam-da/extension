@@ -295,7 +295,7 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 let fakeModel = "";
                 let fakePlatformVersion = "13.0.0";
                 const modelMatch = profile.ua.match(/\(Linux; Android \d+(?:\.\d+)*; ([^)]+)\)/);
-                if (modelMatch) fakeModel = modelMatch[1];
+                if (modelMatch) fakeModel = modelMatch[1].split(' Build/')[0];
                 const verMatch = profile.ua.match(/Android (\d+(?:\.\d+)*)/);
                 if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
 

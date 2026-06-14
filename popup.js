@@ -360,6 +360,13 @@ document.getElementById('btn-logout').addEventListener('click', () => {
     });
 });
 
+function generateAndroidBuildId() {
+    const buildPrefix = ["SKQ1", "TKQ1", "RKQ1", "SP1A", "TP1A", "UP1A", "RP1A"][Math.floor(Math.random() * 7)];
+    const buildDate = `${Math.floor(Math.random() * 5 + 20)}${Math.floor(Math.random() * 12 + 1).toString().padStart(2, '0')}${Math.floor(Math.random() * 28 + 1).toString().padStart(2, '0')}`;
+    const buildSuffix = (Math.floor(Math.random() * 900) + 100).toString().padStart(3, '0');
+    return `${buildPrefix}.${buildDate}.${buildSuffix}`;
+}
+
 const profiles = {
     samsung: {
         name: "Android 14.0.0 | Chrome v125.0.0.0",
@@ -432,7 +439,8 @@ function generateRandomProfile() {
         browserNameStr = `Samsung Internet v${ssVer}`;
     }
 
-    let ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) ${browserSuffix}`;
+    const buildId = generateAndroidBuildId();
+    let ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model} Build/${buildId}) AppleWebKit/537.36 (KHTML, like Gecko) ${browserSuffix}`;
 
     const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
     const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
@@ -494,9 +502,11 @@ function generateStandardChromeProfile() {
         fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
     }
 
+    const buildId = generateAndroidBuildId();
+
     return {
-        name: `Chrome Chuẩn | ${devName} (v${chromeMajor})`,
-        ua: `Mozilla/5.0 (Linux; Android ${androidVer}; ${devName}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`,
+        name: `Chrome Chuẩn | ${devName} (Build/${buildId.split('.')[0]})`,
+        ua: `Mozilla/5.0 (Linux; Android ${androidVer}; ${devName} Build/${buildId}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`,
         platform: "Linux aarch64",
         hardwareConcurrency: 8,
         deviceMemory: 8,
@@ -538,11 +548,10 @@ function generateWindowsProfile() {
 }
 
 function generateKiwiProfile() {
-    // KỊCH BẢN 4: KHÔNG ĐỘNG CHẠM VÀO BẤT CỨ THÔNG SỐ DANH TÍNH NÀO CỦA TRÌNH DUYỆT
-    // Giữ nguyên 100% User-Agent, Platform thật để vượt qua bài test tính toàn vẹn của Cloudflare
     const originalUa = navigator.userAgent;
     const realUaMatch = originalUa.match(/Chrome\/([0-9.]+)/);
     const chromeMajor = realUaMatch ? realUaMatch[1].split('.')[0] : "128";
+    const fullChromeVer = realUaMatch ? realUaMatch[1] : "128.0.6000.0";
 
     const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
     const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
@@ -554,9 +563,23 @@ function generateKiwiProfile() {
         gpu = "Mali-G7" + ["10", "15", "8"][Math.floor(Math.random() * 3)];
     }
 
+    const brands = ["Xiaomi", "Oppo", "Vivo", "Realme", "OnePlus", "Motorola", "Samsung"];
+    const models = ["Pro", "Ultra", "Plus", "Max", "5G", "Lite", "FE"];
+    const brand = brands[Math.floor(Math.random() * brands.length)];
+    const model = models[Math.floor(Math.random() * models.length)];
+    const androidVer = Math.floor(Math.random() * 6) + 9;
+
+    const buildId = generateAndroidBuildId();
+
+    // Thay thế Tên máy, HĐH và nhét thêm mã Build vào User-Agent gốc (Giữ nguyên lõi Chrome)
+    let newUa = originalUa.replace(/\(Linux; Android [^;]+; [^)]+\)/, `(Linux; Android ${androidVer}; ${brand} ${model} Build/${buildId})`);
+    if (newUa === originalUa) {
+        newUa = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model} Build/${buildId}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`;
+    }
+
     return {
-        name: `Kiwi Mobile (Giữ nguyên UA v${chromeMajor})`,
-        ua: originalUa,
+        name: `Kiwi Mobile | ${brand} (Build/${buildId.split('.')[0]})`,
+        ua: newUa,
         platform: navigator.platform,
         hardwareConcurrency: [4, 6, 8][Math.floor(Math.random() * 3)],
         deviceMemory: [4, 6, 8, 12][Math.floor(Math.random() * 4)],
@@ -565,8 +588,7 @@ function generateKiwiProfile() {
         dsf: [2.0, 2.25, 2.5, 2.75, 3.0, 3.5][Math.floor(Math.random() * 6)],
         webglVendor: vendor,
         webglRenderer: gpu,
-        isKiwi: true,
-        skipUaFake: true // CỜ KHÓA: Báo cho hệ thống biết không được ghi đè User Agent và Header mạng
+        isKiwi: true
     };
 }
 
