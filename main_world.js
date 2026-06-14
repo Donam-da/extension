@@ -6,16 +6,18 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     if (!profile) return;
 
     // KỸ THUẬT VƯỢT MẶT TOSTRING() TOÀN CẦU (Không dùng Proxy để tránh bị phát hiện)
+    // SỬ DỤNG WEAKMAP: Giấu kín tuyệt đối hàm gốc khỏi sự nhòm ngó của Cloudflare Turnstile
+    const fnMap = new WeakMap();
     const originalToString = Function.prototype.toString;
     Function.prototype.toString = function toString() {
-        if (this && this.__originalFn) return originalToString.call(this.__originalFn);
+        if (fnMap.has(this)) return originalToString.call(fnMap.get(this));
         if (this === Function.prototype.toString) return originalToString.call(originalToString);
         return originalToString.call(this);
     };
-    Function.prototype.toString.__originalFn = originalToString;
+    fnMap.set(Function.prototype.toString, originalToString);
 
     const maskFunction = (fakeFn, originalFn) => {
-        fakeFn.__originalFn = originalFn;
+        fnMap.set(fakeFn, originalFn);
         if (originalFn && originalFn.name) {
             try { Object.defineProperty(fakeFn, 'name', { value: originalFn.name, configurable: true }); } catch (e) { }
         }
@@ -27,19 +29,27 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             const originalDesc = Object.getOwnPropertyDescriptor(obj, prop);
             const fakeGetter = function () { return value; };
             if (originalDesc && originalDesc.get) {
-                fakeGetter.__originalFn = originalDesc.get;
+                fnMap.set(fakeGetter, originalDesc.get);
             } else {
-                fakeGetter.__originalFn = function () { return "function get " + prop + "() { [native code] }"; };
+                fnMap.set(fakeGetter, function () { return "function get " + prop + "() { [native code] }"; });
             }
             Object.defineProperty(obj, prop, { get: fakeGetter, configurable: true, enumerable: true });
         } catch (e) { }
     };
 
+    const spoofedWindows = new WeakSet();
+
     // Gói toàn bộ logic Spoofing vào một hàm để áp dụng cho cả Window chính lẫn các Iframe con
     function applySpoofing(targetWin) {
-        if (!targetWin || targetWin.__spoofed) return;
+        if (!targetWin) return;
         try {
-            targetWin.__spoofed = true; // Đánh dấu đã fake để không chạy lại
+            // Kiểm tra an toàn Iframe chéo tên miền bằng cách đọc thử location.href
+            // Tránh bẫy CORS, nếu Iframe của Cloudflare bị chạm vào sẽ tự động bỏ qua để không phá vỡ luồng
+            try { let testHref = targetWin.location.href; } catch (err) { return; }
+
+            // Dùng WeakSet để lưu lịch sử thay vì gắn biến trực tiếp vào window, tránh bị Cloudflare quét phát hiện
+            if (spoofedWindows.has(targetWin)) return;
+            spoofedWindows.add(targetWin);
 
             // 1. Fake Navigator
             defineMaskedGetter(targetWin.Navigator.prototype, 'userAgent', profile.ua);
@@ -129,10 +139,24 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
             // 7. Client Hints (userAgentData)
             if (targetWin.navigator && targetWin.navigator.userAgentData) {
-                const fakeBrands = [
+                // Đồng bộ mảng Brands với User-Agent để qua mặt Turnstile
+                let brandName = "Google Chrome";
+                let brandVer = profile.chromeMajor;
+
+                if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
+                    brandName = "Microsoft Edge";
+                } else if (profile.ua.includes("OPR/")) {
+                    brandName = "Opera";
+                } else if (profile.ua.includes("SamsungBrowser")) {
+                    brandName = "Samsung Internet";
+                    const ssMatch = profile.ua.match(/SamsungBrowser\/(\d+)/);
+                    if (ssMatch) brandVer = ssMatch[1];
+                }
+
+                let fakeBrands = [
                     { brand: "Not/A)Brand", version: "8" },
                     { brand: "Chromium", version: profile.chromeMajor },
-                    { brand: "Google Chrome", version: profile.chromeMajor }
+                    { brand: brandName, version: brandVer }
                 ];
                 let fakePlatform = profile.platform.includes("Win") ? "Windows" : profile.platform;
                 if (profile.platform.includes("Linux") && profile.ua.includes("Android")) fakePlatform = "Android";
@@ -167,38 +191,16 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 }, originalGetHighEntropyValues);
             }
 
-            // 8. Fake Web Worker (Đánh chặn Dedicated Workers từ bên trong applySpoofing)
-            try {
-                const OriginalWorker = targetWin.Worker;
-                if (OriginalWorker) {
-                    targetWin.Worker = maskFunction(function Worker(scriptURL, options) {
-                        try {
-                            const workerSpoofCode = `
-                                Object.defineProperty(navigator, 'userAgent', { get: () => "${profile.ua}" });
-                                Object.defineProperty(navigator, 'platform', { get: () => "${profile.platform}" });
-                                Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => ${profile.hardwareConcurrency} });
-                                Object.defineProperty(navigator, 'deviceMemory', { get: () => ${profile.deviceMemory} });
-                            `;
-                            const blob = new Blob([
-                                workerSpoofCode + `\nimportScripts('${new URL(scriptURL, document.baseURI).href}');`
-                            ], { type: 'application/javascript' });
-
-                            const blobUrl = URL.createObjectURL(blob);
-                            return new OriginalWorker(blobUrl, options);
-                        } catch (e) {
-                            return new OriginalWorker(scriptURL, options);
-                        }
-                    }, OriginalWorker);
-                }
-            } catch (e) { }
-
             // 9. Fake DOMRect (Chống thuật toán kiểm tra kích thước đồ hoạ của CreepJS)
             if (targetWin.Element) {
                 const originalGetClientRects = targetWin.Element.prototype.getClientRects;
                 targetWin.Element.prototype.getClientRects = maskFunction(function () {
                     const rects = originalGetClientRects.call(this);
-                    for (let i = 0; i < rects.length; i++) {
-                        try { Object.defineProperty(rects[i], 'width', { value: rects[i].width + (profile.canvasR * 0.0001), configurable: true }); } catch (e) { }
+                    // Bỏ qua thẻ CANVAS và DIV vì Turnstile dùng chúng để đo đạc pixel chính xác
+                    if (this.tagName !== 'CANVAS' && this.tagName !== 'DIV') {
+                        for (let i = 0; i < rects.length; i++) {
+                            try { Object.defineProperty(rects[i], 'width', { value: rects[i].width + (profile.canvasR * 0.0001), configurable: true }); } catch (e) { }
+                        }
                     }
                     return rects;
                 }, originalGetClientRects);
@@ -206,10 +208,12 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 const originalGetBoundingClientRect = targetWin.Element.prototype.getBoundingClientRect;
                 targetWin.Element.prototype.getBoundingClientRect = maskFunction(function () {
                     const rect = originalGetBoundingClientRect.call(this);
-                    try {
-                        Object.defineProperty(rect, 'width', { value: rect.width + (profile.canvasR * 0.0001), configurable: true });
-                        Object.defineProperty(rect, 'height', { value: rect.height + (profile.canvasG * 0.0001), configurable: true });
-                    } catch (e) { }
+                    if (this.tagName !== 'CANVAS' && this.tagName !== 'DIV') {
+                        try {
+                            Object.defineProperty(rect, 'width', { value: rect.width + (profile.canvasR * 0.0001), configurable: true });
+                            Object.defineProperty(rect, 'height', { value: rect.height + (profile.canvasG * 0.0001), configurable: true });
+                        } catch (e) { }
+                    }
                     return rect;
                 }, originalGetBoundingClientRect);
             }
@@ -240,6 +244,8 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                     return pc;
                 }, originalRTC);
                 fakeRTC.prototype = originalRTC.prototype;
+                // Đảm bảo prototype constructor khớp với function ảo để tránh bị Turnstile bắt lỗi
+                try { Object.defineProperty(fakeRTC.prototype, 'constructor', { value: fakeRTC, configurable: true, writable: true }); } catch (e) { }
                 return fakeRTC;
             };
             if (targetWin.RTCPeerConnection) targetWin.RTCPeerConnection = spoofRTC(targetWin.RTCPeerConnection);

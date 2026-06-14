@@ -34,7 +34,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const verMatch = profile.ua.match(/Android (\d+(?:\.\d+)*)/);
         if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
 
-        requestHeaders.push({ header: "sec-ch-ua", operation: "set", value: `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Google Chrome";v="${profile.chromeMajor}"` });
+        // Đồng bộ hóa sec-ch-ua với User-Agent để tránh bị Cloudflare bắt lỗi lệch Brand
+        let secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Google Chrome";v="${profile.chromeMajor}"`;
+        if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
+            secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Microsoft Edge";v="${profile.chromeMajor}"`;
+        } else if (profile.ua.includes("OPR/")) {
+            secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Opera";v="${profile.chromeMajor}"`;
+        } else if (profile.ua.includes("SamsungBrowser")) {
+            const ssMatch = profile.ua.match(/SamsungBrowser\/(\d+)/);
+            const ssVer = ssMatch ? ssMatch[1] : "20";
+            secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Samsung Internet";v="${ssVer}"`;
+        }
+
+        requestHeaders.push({ header: "sec-ch-ua", operation: "set", value: secChUa });
         requestHeaders.push({ header: "sec-ch-ua-mobile", operation: "set", value: profile.ua.includes("Mobile") ? "?1" : "?0" });
         requestHeaders.push({ header: "sec-ch-ua-platform", operation: "set", value: `"${fakePlatform}"` });
         requestHeaders.push({ header: "sec-ch-ua-model", operation: "set", value: `"${fakeModel}"` });

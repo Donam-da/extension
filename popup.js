@@ -374,8 +374,8 @@ const profiles = {
         webglRenderer: "Adreno (TM) 730"
     },
     pixel: {
-        name: "Android 13.0.0 | Chrome v120.0.0.0",
-        ua: "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        name: "Android 13.0.0 | Chrome v126.0.0.0",
+        ua: "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
         platform: "Linux aarch64",
         hardwareConcurrency: 8,
         deviceMemory: 8,
@@ -386,8 +386,8 @@ const profiles = {
         webglRenderer: "Mali-G710"
     },
     linktot_mobile: {
-        name: "Android 14 | Chrome v125 (Chuẩn LinkTot)",
-        ua: "Mozilla/5.0 (Linux; Android 14; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
+        name: "Android 14 | Chrome v128 (Chuẩn LinkTot)",
+        ua: "Mozilla/5.0 (Linux; Android 14; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36",
         platform: "Linux aarch64",
         hardwareConcurrency: 8,
         deviceMemory: 8,
@@ -401,60 +401,117 @@ const profiles = {
 
 function generateRandomProfile() {
     const brands = ["Xiaomi", "Oppo", "Vivo", "Realme", "OnePlus", "Motorola", "Sony", "Nokia", "Asus", "ZTE", "Infinix"];
-    const models = ["Pro", "Ultra", "Plus", "Max", "5G", "Pro+", "Lite", "FE", "Edge", "Power", "Neo", "GT"];
+    const models = ["Pro", "Ultra", "Plus", "Max", "5G", "Pro+", "Lite", "FE", "Vision", "Power", "Neo", "GT", "Play", "Note", "Focus"];
     const brand = brands[Math.floor(Math.random() * brands.length)];
     const model = models[Math.floor(Math.random() * models.length)];
-    const androidVer = Math.floor(Math.random() * 6) + 10; // Phiên bản Android từ 10 đến 15
 
-    // Sinh ngẫu nhiên sâu phiên bản Chrome để tạo ra hàng tỷ tổ hợp User-Agent không đụng hàng
-    const chromeMajor = Math.floor(Math.random() * (128 - 110 + 1)) + 110;
-    const chromeMinor = Math.floor(Math.random() * 5000) + 1000;
-    const chromePatch = Math.floor(Math.random() * 200) + 10;
+    // Mở rộng dải Android để tăng số lượng tổ hợp
+    const androidVer = Math.floor(Math.random() * 6) + 9; // Phiên bản Android từ 9 đến 14
 
-    const w = [360, 384, 393, 412][Math.floor(Math.random() * 4)];
-    const h = [800, 854, 873, 915][Math.floor(Math.random() * 4)];
+    // ĐỒNG BỘ ENGINE: Lấy CHÍNH XÁC đến từng con số phiên bản Chrome thật của máy để vượt Cloudflare Turnstile
+    // Không được sinh ngẫu nhiên số đuôi vì Cloudflare biết chính xác phiên bản nào có thực, phiên bản nào là ảo
+    const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
+    let fullChromeVer = "";
+    let chromeMajor = "128";
+    if (realUaMatch) {
+        fullChromeVer = realUaMatch[1];
+        chromeMajor = fullChromeVer.split('.')[0];
+    } else {
+        chromeMajor = (Math.floor(Math.random() * 6) + 125).toString();
+        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
+    }
+
+    // Sinh ngẫu nhiên mọi loại trình duyệt trên nền tảng di động
+    const browserTypes = ["Chrome", "Edge", "Opera", "SamsungBrowser"];
+    const browserType = browserTypes[Math.floor(Math.random() * browserTypes.length)];
+
+    let ua = "";
+    let browserNameStr = "";
+
+    if (browserType === "Edge") {
+        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36 EdgA/${chromeMajor}.0.${Math.floor(Math.random() * 50) + 2000}.0`;
+        browserNameStr = `Edge v${chromeMajor}`;
+    } else if (browserType === "Opera") {
+        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36 OPR/${Math.floor(Math.random() * 10) + 70}.0.2254.${Math.floor(Math.random() * 900) + 70000}`;
+        browserNameStr = `Opera (Chr ${chromeMajor})`;
+    } else if (browserType === "SamsungBrowser") {
+        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/${Math.floor(Math.random() * 5) + 20}.0 Chrome/${fullChromeVer} Mobile Safari/537.36`;
+        browserNameStr = `Samsung (Chr ${chromeMajor})`;
+    } else {
+        ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`;
+        browserNameStr = `Chrome v${chromeMajor}`;
+    }
+
+    const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
+    const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
 
     return {
-        name: `Android ${androidVer} | Chrome v${chromeMajor}.${chromeMinor}`,
-        ua: `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.${chromeMinor}.${chromePatch} Mobile Safari/537.36`,
+        name: `Android ${androidVer} | ${browserNameStr}`,
+        ua: ua,
         platform: "Linux aarch64",
         hardwareConcurrency: [4, 6, 8][Math.floor(Math.random() * 3)],
         deviceMemory: [4, 6, 8, 12][Math.floor(Math.random() * 4)],
         screenWidth: w,
         screenHeight: h,
-        dsf: [2.0, 2.25, 2.5, 2.75, 3.0][Math.floor(Math.random() * 5)],
+        dsf: [2.0, 2.25, 2.5, 2.75, 3.0, 3.5][Math.floor(Math.random() * 6)],
         webglVendor: "Qualcomm",
-        webglRenderer: "Adreno (TM) " + ["610", "618", "620", "640", "650", "730", "740"][Math.floor(Math.random() * 7)]
+        webglRenderer: "Adreno (TM) " + ["610", "618", "620", "640", "650", "730", "740", "750"][Math.floor(Math.random() * 8)]
     };
 }
 
 function generateStandardChromeProfile() {
-    // Kịch bản 2: Chỉ lấy các máy nguyên bản, chuẩn và cao cấp nhất
-    const devices = [
-        { name: "SM-S928B", vendor: "Qualcomm", gpu: "Adreno (TM) 750" }, // S24 Ultra
-        { name: "SM-S918B", vendor: "Qualcomm", gpu: "Adreno (TM) 740" }, // S23 Ultra
-        { name: "SM-S908B", vendor: "Qualcomm", gpu: "Adreno (TM) 730" }, // S22 Ultra
-        { name: "Pixel 8 Pro", vendor: "ARM", gpu: "Mali-G715" },
-        { name: "Pixel 7", vendor: "ARM", gpu: "Mali-G710" }
-    ];
-    const dev = devices[Math.floor(Math.random() * devices.length)];
-    const androidVer = Math.floor(Math.random() * 2) + 13; // Android 13 hoặc 14
+    // Kịch bản 2: Sinh ngẫu nhiên hàng tỷ cấu hình nhưng 100% là CHROME và MÁY CHUẨN
+    const samsungSeries = ["S928", "S926", "S921", "S918", "S916", "S911", "S908", "S906", "S901", "A556", "A546", "A536", "A346", "A736"];
+    const samsungSuffix = ["B", "U", "U1", "W", "N", "0", "E"];
+    const pixelModels = ["Pixel 6", "Pixel 6 Pro", "Pixel 6a", "Pixel 7", "Pixel 7 Pro", "Pixel 7a", "Pixel 8", "Pixel 8 Pro", "Pixel 8a", "Pixel 9", "Pixel 9 Pro"];
 
-    const chromeMajor = Math.floor(Math.random() * 6) + 120; // Chrome 120 - 125
-    const chromeMinor = Math.floor(Math.random() * 5000) + 1000;
-    const chromePatch = Math.floor(Math.random() * 200) + 10;
+    let devName = "";
+    let vendor = "";
+    let gpu = "";
+
+    // Ghép nối tự động thiết bị phần cứng
+    if (Math.random() > 0.4) {
+        const series = samsungSeries[Math.floor(Math.random() * samsungSeries.length)];
+        const suffix = samsungSuffix[Math.floor(Math.random() * samsungSuffix.length)];
+        devName = `SM-${series}${suffix}`;
+        vendor = "Qualcomm";
+        if (series.includes("S92")) gpu = "Adreno (TM) 750";
+        else if (series.includes("S91")) gpu = "Adreno (TM) 740";
+        else if (series.includes("S90")) gpu = "Adreno (TM) 730";
+        else gpu = "Adreno (TM) " + ["618", "642L", "644"][Math.floor(Math.random() * 3)];
+    } else {
+        devName = pixelModels[Math.floor(Math.random() * pixelModels.length)];
+        vendor = "ARM";
+        if (devName.includes("8") || devName.includes("9")) gpu = "Mali-G715";
+        else if (devName.includes("7")) gpu = "Mali-G710";
+        else gpu = "Mali-G78";
+    }
+
+    const androidVer = Math.floor(Math.random() * 4) + 11; // Rải đều Android từ 11 đến 14
+
+    // ĐỒNG BỘ ENGINE: Dùng CHÍNH XÁC chuỗi phiên bản Chrome thật của trình duyệt hiện tại
+    const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
+    let fullChromeVer = "";
+    let chromeMajor = "128";
+    if (realUaMatch) {
+        fullChromeVer = realUaMatch[1];
+        chromeMajor = fullChromeVer.split('.')[0];
+    } else {
+        chromeMajor = (Math.floor(Math.random() * 6) + 125).toString();
+        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
+    }
 
     return {
-        name: `Chrome Chuẩn | ${dev.name} (v${chromeMajor}.${chromeMinor})`,
-        ua: `Mozilla/5.0 (Linux; Android ${androidVer}; ${dev.name}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.${chromeMinor}.${chromePatch} Mobile Safari/537.36`,
+        name: `Chrome Chuẩn | ${devName} (v${chromeMajor})`,
+        ua: `Mozilla/5.0 (Linux; Android ${androidVer}; ${devName}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`,
         platform: "Linux aarch64",
         hardwareConcurrency: 8,
         deviceMemory: 8,
-        screenWidth: [393, 412][Math.floor(Math.random() * 2)],
-        screenHeight: [850, 915][Math.floor(Math.random() * 2)],
-        dsf: [2.0, 2.5, 3.0][Math.floor(Math.random() * 3)],
-        webglVendor: dev.vendor,
-        webglRenderer: dev.gpu
+        screenWidth: [384, 393, 412][Math.floor(Math.random() * 3)],
+        screenHeight: [850, 873, 892, 915][Math.floor(Math.random() * 4)],
+        dsf: [2.0, 2.5, 3.0, 3.5][Math.floor(Math.random() * 4)],
+        webglVendor: vendor,
+        webglRenderer: gpu
     };
 }
 
@@ -469,10 +526,10 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     else if (selected === "random_noise") profile = generateStandardChromeProfile();
     else {
         profile = JSON.parse(JSON.stringify(profiles[selected]));
-        const chromeMinor = Math.floor(Math.random() * 5000) + 1000;
-        const chromePatch = Math.floor(Math.random() * 200) + 10;
-        profile.ua = profile.ua.replace(/\.0\.0\.0/g, `.0.${chromeMinor}.${chromePatch}`);
-        profile.name = profile.name.replace(/\.0\.0\.0/g, `.0.${chromeMinor}`);
+        const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
+        let fullChromeVer = realUaMatch ? realUaMatch[1] : `128.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
+        profile.ua = profile.ua.replace(/Chrome\/\d+\.0\.0\.0/, `Chrome/${fullChromeVer}`);
+        profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${fullChromeVer.split('.')[0]}`);
     }
 
     // Luôn luôn tạo nhiễu ngẫu nhiên để đảm bảo mỗi lần ấn tạo là ra một máy hoàn toàn độc nhất
@@ -507,7 +564,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
             setTimeout(() => {
                 btn.textContent = originalText;
                 btn.style = "";
-            }, 3000);
+            }, 1000); // Rút ngắn thời gian chờ hiển thị Success xuống còn 1 giây (1000ms)
 
             // Tự động tải lại tab hiện hành để trang web nhận diện danh tính mới ngay lập tức
             chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
