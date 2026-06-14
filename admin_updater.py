@@ -121,14 +121,18 @@ class AdminUpdaterGUI:
         self.log_area.see(tk.END)
         
     def load_initial_data(self):
-        if os.path.exists(TOKEN_FILE):
-            with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        token_path = os.path.join(base_dir, TOKEN_FILE)
+        manifest_path = os.path.join(base_dir, "manifest.json")
+
+        if os.path.exists(token_path):
+            with open(token_path, "r", encoding="utf-8") as f:
                 token = f.read().strip()
                 if token: self.token_entry.insert(0, token)
         
-        if os.path.exists("manifest.json"):
+        if os.path.exists(manifest_path):
             try:
-                with open("manifest.json", "r", encoding="utf-8") as f:
+                with open(manifest_path, "r", encoding="utf-8") as f:
                     manifest = json.load(f)
                     cur_v = manifest.get("version", "1.0")
                     self.lbl_current_version.config(text=f"v{cur_v}")
@@ -142,8 +146,10 @@ class AdminUpdaterGUI:
                         self.new_version_entry.insert(0, cur_v + ".1")
             except Exception as e:
                 self.log(f"[-] Lỗi đọc manifest.json: {e}")
+                self.lbl_current_version.config(text="Lỗi đọc file", fg="#E53935")
         else:
             self.log("[-] Không tìm thấy file manifest.json trong thư mục!")
+            self.lbl_current_version.config(text="Không tìm thấy", fg="#E53935")
             
     def browse_zip(self):
         file_path = filedialog.askopenfilename(
@@ -156,7 +162,9 @@ class AdminUpdaterGUI:
 
     def save_token(self):
         token = self.token_entry.get().strip()
-        with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        token_path = os.path.join(base_dir, TOKEN_FILE)
+        with open(token_path, "w", encoding="utf-8") as f:
             f.write(token)
         messagebox.showinfo("Thành công", "Đã lưu Token GitHub!")
         self.log("[+] Đã lưu Token mới.")

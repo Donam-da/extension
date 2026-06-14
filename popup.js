@@ -559,16 +559,5 @@ function loadMainApp() {
     });
 }
 
-// Tính năng Ghim ra cửa sổ riêng
-document.getElementById('btn-pin-popup').addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: "OPEN_EXTENSION_UI" });
-    window.close(); // Đóng popup mặc định
-});
-
-// Nếu đang ở dạng cửa sổ riêng rồi (tab) thì ẩn nút Ghim đi để tránh bấm trùng
-chrome.tabs.getCurrent((tab) => {
-    if (tab) document.getElementById('btn-pin-popup').style.display = 'none';
-});
-
 // Bắt đầu quy trình kiểm tra bản quyền ngay khi mở Extension
 initLicensing();
