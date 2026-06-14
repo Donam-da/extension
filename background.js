@@ -74,10 +74,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             "cache": true,
             "cacheStorage": true,
             "cookies": true,
+            "downloads": true,
             "fileSystems": true,
+            "formData": true,
+            "history": true,
             "indexedDB": true,
             "localStorage": true,
-            "pluginData": false,
+            "passwords": true,
+            "pluginData": true,
             "serviceWorkers": true,
             "webSQL": true
         }, () => {
