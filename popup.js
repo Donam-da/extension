@@ -412,10 +412,27 @@ function generateRandomProfile() {
     const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
     const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
 
-    // Giải pháp tối thượng: Giữ nguyên 100% trình duyệt là CHROME để khớp hoàn toàn với lõi Kiwi
-    // Chỉ thay đổi thông số phần cứng, CPU, RAM, Tên máy và Phiên bản Android
-    let ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`;
+    // KỊCH BẢN 1 (ALL BROWSER): Fake ngẫu nhiên cấu trúc của hàng chục loại trình duyệt (Dựa trên lõi Chromium)
+    const browserTypes = ["Chrome", "Edge", "Opera", "Samsung"];
+    const selectedBrowser = browserTypes[Math.floor(Math.random() * browserTypes.length)];
+
+    let browserSuffix = `Chrome/${fullChromeVer} Mobile Safari/537.36`;
     let browserNameStr = `Chrome v${chromeMajor}`;
+
+    if (selectedBrowser === "Edge") {
+        browserSuffix = `Chrome/${fullChromeVer} Mobile Safari/537.36 EdgA/${fullChromeVer}`;
+        browserNameStr = `Edge v${chromeMajor}`;
+    } else if (selectedBrowser === "Opera") {
+        const operaVer = Math.floor(Math.random() * 20) + 60; // Trình duyệt Opera Mobile có dải phiên bản riêng
+        browserSuffix = `Chrome/${fullChromeVer} Mobile Safari/537.36 OPR/${operaVer}.0.0.0`;
+        browserNameStr = `Opera v${operaVer}`;
+    } else if (selectedBrowser === "Samsung") {
+        const ssVer = Math.floor(Math.random() * 10) + 15; // Samsung Internet có dải phiên bản riêng
+        browserSuffix = `Chrome/${fullChromeVer} Mobile Safari/537.36 SamsungBrowser/${ssVer}.0`;
+        browserNameStr = `Samsung Internet v${ssVer}`;
+    }
+
+    let ua = `Mozilla/5.0 (Linux; Android ${androidVer}; ${brand} ${model}) AppleWebKit/537.36 (KHTML, like Gecko) ${browserSuffix}`;
 
     const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
     const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
