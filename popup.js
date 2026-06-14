@@ -499,6 +499,35 @@ function generateStandardChromeProfile() {
     };
 }
 
+function generateWindowsProfile() {
+    // ĐỒNG BỘ ENGINE: Dùng CHÍNH XÁC chuỗi phiên bản Chrome thật của trình duyệt hiện tại
+    const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
+    let fullChromeVer = "";
+    let chromeMajor = "128";
+    if (realUaMatch) {
+        fullChromeVer = realUaMatch[1];
+        chromeMajor = fullChromeVer.split('.')[0];
+    } else {
+        chromeMajor = (Math.floor(Math.random() * 6) + 125).toString();
+        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
+    }
+
+    const w = [1366, 1600, 1920, 2560][Math.floor(Math.random() * 4)];
+    const h = w === 1366 ? 768 : w === 1600 ? 900 : w === 1920 ? 1080 : 1440;
+
+    return {
+        name: `Windows PC | Chrome v${chromeMajor}`,
+        ua: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Safari/537.36`,
+        platform: "Win32",
+        hardwareConcurrency: [4, 6, 8, 12, 16][Math.floor(Math.random() * 5)],
+        deviceMemory: [8, 16, 32][Math.floor(Math.random() * 3)],
+        screenWidth: w,
+        screenHeight: h,
+        dsf: [1.0, 1.25, 1.5][Math.floor(Math.random() * 3)]
+        // CHÚ Ý: Cố tình KHÔNG truyền webglVendor và webglRenderer để lấy GPU thật của PC vượt Cloudflare
+    };
+}
+
 function updateUI(profile) {
     // Đã ẩn tính năng hiển thị thông số thiết bị do không còn cần thiết
 }
@@ -508,6 +537,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     let profile;
     if (selected === "random") profile = generateRandomProfile();
     else if (selected === "random_noise") profile = generateStandardChromeProfile();
+    else if (selected === "windows_pc") profile = generateWindowsProfile();
     else {
         profile = JSON.parse(JSON.stringify(profiles[selected]));
         const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
@@ -554,39 +584,6 @@ document.getElementById('apply-btn').addEventListener('click', () => {
             chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
                 if (tabs[0]) chrome.tabs.reload(tabs[0].id);
             });
-        });
-    });
-});
-
-document.getElementById('crypto-settings-btn').addEventListener('click', () => {
-    const box = document.getElementById('crypto-settings-box');
-    if (box.style.display === 'none') {
-        box.style.display = 'block';
-        chrome.storage.local.get(['cryptoEmail', 'cryptoPass'], (data) => {
-            if (data.cryptoEmail) document.getElementById('crypto-email').value = data.cryptoEmail;
-            if (data.cryptoPass) document.getElementById('crypto-pass').value = data.cryptoPass;
-        });
-    } else {
-        box.style.display = 'none';
-    }
-});
-
-document.getElementById('save-crypto-btn').addEventListener('click', () => {
-    const email = document.getElementById('crypto-email').value.trim();
-    const pass = document.getElementById('crypto-pass').value.trim();
-    chrome.storage.local.set({ cryptoEmail: email, cryptoPass: pass }, () => {
-        const btn = document.getElementById('save-crypto-btn');
-        const origText = btn.textContent;
-        btn.textContent = "ĐÃ LƯU!";
-        setTimeout(() => btn.textContent = origText, 2000);
-    });
-});
-
-document.getElementById('crypto-btn').addEventListener('click', () => {
-    chrome.storage.local.get(['cryptoEmail', 'cryptoPass'], (data) => {
-        chrome.runtime.sendMessage({
-            type: "OPEN_CRYPTO_LOGIN",
-            creds: { email: data.cryptoEmail || "", pass: data.cryptoPass || "" }
         });
     });
 });

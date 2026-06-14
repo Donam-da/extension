@@ -5,44 +5,6 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     }
     if (!profile) return;
 
-    // --- HỆ THỐNG RADAR BẮT LỖI CLOUDFLARE TRỰC TIẾP TRÊN MÀN HÌNH ---
-    function showDebugError(msg, source, lineno, colno, error) {
-        let errStr = (msg + " " + source + " " + (error ? error.stack : '')).toLowerCase();
-        if (!errStr.includes('cloudflare') && !errStr.includes('turnstile') && !errStr.includes('challenge')) return;
-
-        const logError = () => {
-            let errBox = document.getElementById('vcl-cf-debug');
-            if (!errBox) {
-                errBox = document.createElement('div');
-                errBox.id = 'vcl-cf-debug';
-                errBox.style.cssText = 'position: fixed; top: 10px; left: 10px; z-index: 2147483647; background: rgba(13, 17, 23, 0.95); color: #ff5252; border: 2px solid #ff5252; padding: 15px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; max-width: 90vw; max-height: 50vh; overflow-y: auto; box-shadow: 0 0 20px rgba(255, 82, 82, 0.5); pointer-events: none;';
-                document.body.appendChild(errBox);
-            }
-
-            const errDiv = document.createElement('div');
-            errDiv.style.borderBottom = "1px dashed #30363d";
-            errDiv.style.marginBottom = "8px";
-            errDiv.style.paddingBottom = "8px";
-            errDiv.innerHTML = `<strong style="color:#FF9800; font-size: 13px;">[PHÁT HIỆN LỖI CLOUDFLARE]</strong><br>
-                                <b style="color: #c9d1d9;">Lỗi:</b> ${msg}<br>
-                                <b style="color: #c9d1d9;">Nguồn:</b> ${source}:${lineno}:${colno}<br>
-                                <b style="color: #c9d1d9;">Dấu vết:</b> <span style="color:#8b949e;">${error && error.stack ? error.stack.replace(/\n/g, '<br>') : 'Không có'}</span>`;
-            errBox.appendChild(errDiv);
-        };
-
-        if (document.body) logError();
-        else document.addEventListener('DOMContentLoaded', logError);
-    }
-
-    window.addEventListener('error', function (e) {
-        showDebugError(e.message, e.filename, e.lineno, e.colno, e.error);
-    }, true);
-
-    window.addEventListener('unhandledrejection', function (e) {
-        if (e.reason) showDebugError(e.reason.message || "Promise Rejection", e.reason.stack || "", 0, 0, e.reason);
-    }, true);
-
-    // KỸ THUẬT VƯỢT MẶT TOSTRING() TOÀN CẦU (Không dùng Proxy để tránh bị phát hiện)
     // SỬ DỤNG WEAKMAP TOÀN CỤC: Chia sẻ chung giữa cửa sổ chính và mọi Iframe con
     const globalFnMap = new WeakMap();
 
@@ -57,17 +19,22 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     const defineMaskedGetter = (obj, prop, value, expectedClassName) => {
         try {
             const originalDesc = Object.getOwnPropertyDescriptor(obj, prop);
-            const fakeGetter = function () {
-                if (expectedClassName) {
-                    // Sử dụng Object.prototype.toString để kiểm tra chính xác class xuyên Iframe (Cross-realm), giống hệt hành vi native C++
-                    if (Object.prototype.toString.call(this) !== `[object ${expectedClassName}]`) throw new TypeError("Illegal invocation");
+
+            // SỬ DỤNG ES6 METHOD SHORTHAND: Tạo hàm KHÔNG CÓ thuộc tính prototype (Giống hệt hàm Native C++)
+            const wrapper = {
+                getter() {
+                    if (expectedClassName) {
+                        if (Object.prototype.toString.call(this) !== `[object ${expectedClassName}]`) throw new TypeError("Illegal invocation");
+                    }
+                    return value;
                 }
-                return value;
             };
+            const fakeGetter = wrapper.getter;
+
             if (originalDesc && originalDesc.get) {
                 globalFnMap.set(fakeGetter, originalDesc.get);
             } else {
-                globalFnMap.set(fakeGetter, function () { return "function get " + prop + "() { [native code] }"; });
+                globalFnMap.set(fakeGetter, `function get ${prop}() { [native code] }`);
             }
             Object.defineProperty(obj, prop, { get: fakeGetter, set: undefined, configurable: true, enumerable: true });
         } catch (e) { }
@@ -75,31 +42,63 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
     const spoofedWindows = new WeakSet();
 
-    // Gói toàn bộ logic Spoofing vào một hàm để áp dụng cho cả Window chính lẫn các Iframe con
     function applySpoofing(targetWin) {
         if (!targetWin) return;
         try {
-            // Kiểm tra an toàn Iframe chéo tên miền bằng cách đọc thử location.href
-            // Tránh bẫy CORS, nếu Iframe của Cloudflare bị chạm vào sẽ tự động bỏ qua để không phá vỡ luồng
             try { let testHref = targetWin.location.href; } catch (err) { return; }
 
-            // Dùng WeakSet để lưu lịch sử thay vì gắn biến trực tiếp vào window, tránh bị Cloudflare quét phát hiện
             if (spoofedWindows.has(targetWin)) return;
             spoofedWindows.add(targetWin);
 
-            // 0. BẢO VỆ HÀM TOSTRING() ĐỘC LẬP TRÊN TỪNG IFRAME (Tuyệt chiêu tàng hình đa lớp)
+            // 0. BẢO VỆ HÀM TOSTRING()
             if (targetWin.Function && targetWin.Function.prototype && targetWin.Function.prototype.toString) {
                 const origToString = targetWin.Function.prototype.toString;
-                // Đảm bảo không bọc lại 2 lần gây lỗi đệ quy
                 if (!globalFnMap.has(origToString)) {
-                    const fakeToString = function toString() {
-                        if (globalFnMap.has(this)) return origToString.call(globalFnMap.get(this));
-                        if (this === targetWin.Function.prototype.toString) return origToString.call(origToString);
-                        return origToString.call(this);
+                    const wrapper = {
+                        toString() {
+                            if (globalFnMap.has(this)) {
+                                const target = globalFnMap.get(this);
+                                if (typeof target === 'string') return target;
+                                return origToString.call(target);
+                            }
+                            if (this === targetWin.Function.prototype.toString) return origToString.call(origToString);
+                            return origToString.call(this);
+                        }
                     };
+                    const fakeToString = wrapper.toString;
                     targetWin.Function.prototype.toString = fakeToString;
                     globalFnMap.set(fakeToString, origToString);
                     globalFnMap.set(origToString, origToString);
+                }
+            }
+
+            // 0.5 BẢO VỆ IFRAME ĐỘNG (Chống rò rỉ danh tính thật qua about:blank)
+            // Khi trang web tạo iframe ẩn, nó sẽ lấy được navigator gốc trước khi extension kịp chạy.
+            if (targetWin.HTMLIFrameElement && targetWin.HTMLIFrameElement.prototype) {
+                const iframeWinDesc = Object.getOwnPropertyDescriptor(targetWin.HTMLIFrameElement.prototype, 'contentWindow');
+                if (iframeWinDesc && iframeWinDesc.get && !globalFnMap.has(iframeWinDesc.get)) {
+                    const wrapperWin = {
+                        get() {
+                            const win = iframeWinDesc.get.call(this);
+                            if (win) applySpoofing(win); // Tiêm danh tính ảo ngay lập tức vào iframe
+                            return win;
+                        }
+                    };
+                    Object.defineProperty(targetWin.HTMLIFrameElement.prototype, 'contentWindow', { get: wrapperWin.get, configurable: true, enumerable: true });
+                    globalFnMap.set(wrapperWin.get, iframeWinDesc.get);
+                }
+
+                const iframeDocDesc = Object.getOwnPropertyDescriptor(targetWin.HTMLIFrameElement.prototype, 'contentDocument');
+                if (iframeDocDesc && iframeDocDesc.get && !globalFnMap.has(iframeDocDesc.get)) {
+                    const wrapperDoc = {
+                        get() {
+                            const doc = iframeDocDesc.get.call(this);
+                            if (doc && doc.defaultView) applySpoofing(doc.defaultView);
+                            return doc;
+                        }
+                    };
+                    Object.defineProperty(targetWin.HTMLIFrameElement.prototype, 'contentDocument', { get: wrapperDoc.get, configurable: true, enumerable: true });
+                    globalFnMap.set(wrapperDoc.get, iframeDocDesc.get);
                 }
             }
 
@@ -119,43 +118,51 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                     targetWin.ontouchstart = null;
                     try { Object.defineProperty(targetWin, 'ontouchstart', { value: null, writable: true, configurable: true, enumerable: true }); } catch (e) { }
                 }
-                // Đã gỡ bỏ fake plugins/mimeTypes vì Kiwi Browser vốn đã tự làm trống array một cách chuẩn chỉ. Can thiệp thêm sẽ dễ bị lộ.
+            }
+
+            // 2. Fake Screen
+            if (profile.screenWidth && profile.screenHeight && targetWin.Screen) {
+                defineMaskedGetter(targetWin.Screen.prototype, 'width', profile.screenWidth, "Screen");
+                defineMaskedGetter(targetWin.Screen.prototype, 'height', profile.screenHeight, "Screen");
+                defineMaskedGetter(targetWin.Screen.prototype, 'availWidth', profile.screenWidth, "Screen");
+                defineMaskedGetter(targetWin.Screen.prototype, 'availHeight', profile.screenHeight, "Screen");
+                if (profile.colorDepth) {
+                    defineMaskedGetter(targetWin.Screen.prototype, 'colorDepth', profile.colorDepth, "Screen");
+                    defineMaskedGetter(targetWin.Screen.prototype, 'pixelDepth', profile.colorDepth, "Screen");
+                }
             }
 
             // 3. Deep Fake WebGL
-            if (targetWin.WebGLRenderingContext) {
+            if (targetWin.WebGLRenderingContext && profile.webglVendor && profile.webglRenderer) {
                 const originalGetParameter = targetWin.WebGLRenderingContext.prototype.getParameter;
-                targetWin.WebGLRenderingContext.prototype.getParameter = maskFunction(function (param) {
-                    if (param === 37445) return profile.webglVendor;
-                    if (param === 37446) return profile.webglRenderer;
-                    return originalGetParameter.call(this, param);
-                }, originalGetParameter);
+                const wrapper = {
+                    getParameter(param) {
+                        if (param === 37445) return profile.webglVendor;
+                        if (param === 37446) return profile.webglRenderer;
+                        return originalGetParameter.call(this, param);
+                    }
+                };
+                targetWin.WebGLRenderingContext.prototype.getParameter = maskFunction(wrapper.getParameter, originalGetParameter);
             }
-            if (targetWin.WebGL2RenderingContext) {
+            if (targetWin.WebGL2RenderingContext && profile.webglVendor && profile.webglRenderer) {
                 const originalGetParameter2 = targetWin.WebGL2RenderingContext.prototype.getParameter;
-                targetWin.WebGL2RenderingContext.prototype.getParameter = maskFunction(function (param) {
-                    if (param === 37445) return profile.webglVendor;
-                    if (param === 37446) return profile.webglRenderer;
-                    return originalGetParameter2.call(this, param);
-                }, originalGetParameter2);
+                const wrapper2 = {
+                    getParameter(param) {
+                        if (param === 37445) return profile.webglVendor;
+                        if (param === 37446) return profile.webglRenderer;
+                        return originalGetParameter2.call(this, param);
+                    }
+                };
+                targetWin.WebGL2RenderingContext.prototype.getParameter = maskFunction(wrapper2.getParameter, originalGetParameter2);
             }
 
             // 6. Fake window.chrome
-            // TẨY SẠCH DẤU VẾT KIWI BROWSER: Chrome Mobile thật KHÔNG BAO GIỜ có các API Extension
-            // Cloudflare phát hiện Kiwi giả danh Chrome vì sự tồn tại của chrome.runtime!
             if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
-                if (targetWin.chrome) {
-                    const extApis = ['runtime', 'extension', 'app', 'webstore', 'management'];
-                    extApis.forEach(api => {
-                        try { delete targetWin.chrome[api]; } catch (e) { }
-                        try { Object.defineProperty(targetWin.chrome, api, { value: undefined, configurable: true }); } catch (e) { }
-                    });
-                }
+                try { delete targetWin.chrome; } catch (e) { }
             }
 
             // 7. Client Hints (userAgentData)
             if (targetWin.navigator && targetWin.navigator.userAgentData) {
-                // Đồng bộ mảng Brands với User-Agent để qua mặt Turnstile
                 let brandName = "Google Chrome";
                 let brandVer = profile.chromeMajor;
 
@@ -191,158 +198,28 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 defineMaskedGetter(uaDataProto, 'platform', fakePlatform, "NavigatorUAData");
 
                 const originalGetHighEntropyValues = uaDataProto.getHighEntropyValues;
-                uaDataProto.getHighEntropyValues = maskFunction(function (hints) {
-                    return originalGetHighEntropyValues.call(this, hints).then(values => {
-                        let fakeValues = { ...values };
-                        if (hints.includes("brands")) fakeValues.brands = fakeBrands;
-                        if (hints.includes("fullVersionList")) fakeValues.fullVersionList = fakeBrands;
-                        if (hints.includes("platform")) fakeValues.platform = fakePlatform;
-                        if (hints.includes("mobile")) fakeValues.mobile = profile.ua.includes("Mobile");
-                        if (hints.includes("model")) fakeValues.model = fakeModel;
-                        if (hints.includes("platformVersion")) fakeValues.platformVersion = fakePlatformVersion;
-                        if (hints.includes("architecture")) fakeValues.architecture = profile.platform.includes("Win") ? "x86" : "arm";
-                        if (hints.includes("bitness")) fakeValues.bitness = "64";
-                        return fakeValues;
-                    });
-                }, originalGetHighEntropyValues);
+                const wrapperUA = {
+                    getHighEntropyValues(hints) {
+                        return originalGetHighEntropyValues.call(this, hints).then(values => {
+                            let fakeValues = { ...values };
+                            if (hints.includes("brands")) fakeValues.brands = fakeBrands;
+                            if (hints.includes("fullVersionList")) fakeValues.fullVersionList = fakeBrands;
+                            if (hints.includes("platform")) fakeValues.platform = fakePlatform;
+                            if (hints.includes("mobile")) fakeValues.mobile = profile.ua.includes("Mobile");
+                            if (hints.includes("model")) fakeValues.model = fakeModel;
+                            if (hints.includes("platformVersion")) fakeValues.platformVersion = fakePlatformVersion;
+                            if (hints.includes("architecture")) fakeValues.architecture = profile.platform.includes("Win") ? "x86" : "arm";
+                            if (hints.includes("bitness")) fakeValues.bitness = "64";
+                            return fakeValues;
+                        });
+                    }
+                };
+                uaDataProto.getHighEntropyValues = maskFunction(wrapperUA.getHighEntropyValues, originalGetHighEntropyValues);
             }
-
-            // 9.5. Chặn rò rỉ IP qua WebRTC (Xóa STUN/TURN Servers)
-            const spoofRTC = (RTClass) => {
-                if (!RTClass) return;
-                const originalRTC = RTClass;
-                const fakeRTC = maskFunction(function (config) {
-                    let safeConfig = {};
-                    if (config) {
-                        try { safeConfig = JSON.parse(JSON.stringify(config)); }
-                        catch (e) { safeConfig = { ...config }; }
-                    }
-                    safeConfig.iceServers = []; // Xóa sạch máy chủ STUN/TURN
-                    safeConfig.iceTransportPolicy = 'relay'; // Ép dùng TURN (nếu không có sẽ chặn hoàn toàn quá trình lấy IP)
-
-                    const pc = new originalRTC(safeConfig);
-                    if (pc.setConfiguration) {
-                        const origSet = pc.setConfiguration;
-                        pc.setConfiguration = maskFunction(function (cfg) {
-                            let safeCfg = cfg ? { ...cfg } : {};
-                            safeCfg.iceServers = [];
-                            safeCfg.iceTransportPolicy = 'relay';
-                            return origSet.call(this, safeCfg);
-                        }, origSet);
-                    }
-                    return pc;
-                }, originalRTC);
-                fakeRTC.prototype = originalRTC.prototype;
-                // Đảm bảo prototype constructor khớp với function ảo để tránh bị Turnstile bắt lỗi
-                try { Object.defineProperty(fakeRTC.prototype, 'constructor', { value: fakeRTC, configurable: true, writable: true }); } catch (e) { }
-                return fakeRTC;
-            };
-            if (targetWin.RTCPeerConnection) targetWin.RTCPeerConnection = spoofRTC(targetWin.RTCPeerConnection);
-            if (targetWin.webkitRTCPeerConnection) targetWin.webkitRTCPeerConnection = spoofRTC(targetWin.webkitRTCPeerConnection);
-
-            // 9.6. Chặn Service Worker (Tránh bị soi cấu hình ngầm)
-            if (targetWin.navigator && targetWin.navigator.serviceWorker) {
-                const origRegister = targetWin.navigator.serviceWorker.register;
-                targetWin.navigator.serviceWorker.register = maskFunction(function () {
-                    return Promise.reject(new Error("Service Worker is disabled for privacy"));
-                }, origRegister);
-            }
-
-            // 10. Smart Back (Giữ lại tính năng của Admin)
-            try {
-                const hostname = targetWin.location.hostname;
-                const href = targetWin.location.href;
-                if (targetWin === targetWin.top && (hostname.includes('online') || hostname.includes('uptolink') || hostname.includes('linkhuongdan') || href.includes('/online/'))) {
-                    const backUrl = profile.lastUptoLink || 'https://uptolink.vip';
-
-                    // Tuyệt chiêu: Giả lập "Điền link và ấn Enter" như người dùng thật
-                    const forceGoBack = () => {
-                        targetWin.location.href = backUrl; // Điền URL
-                        try {
-                            const a = targetWin.document.createElement('a'); // Tạo link ẩn
-                            a.href = backUrl;
-                            targetWin.document.body.appendChild(a);
-                            a.click(); // Tự động click (Enter)
-                        } catch (e) { }
-                    };
-
-                    // Ghi đè history.back và history.go để phòng trường hợp nút bấm dùng JS lùi trang
-                    try {
-                        const origBack = targetWin.History.prototype.back;
-                        targetWin.History.prototype.back = maskFunction(function () { forceGoBack(); }, origBack);
-
-                        const origGo = targetWin.History.prototype.go;
-                        targetWin.History.prototype.go = maskFunction(function (delta) {
-                            if (delta === -1) { forceGoBack(); }
-                            else { return origGo.call(this, delta); }
-                        }, origGo);
-                    } catch (e) { }
-
-                    // Bẫy nút Back của trình duyệt bằng cách đẩy 1 state giả
-                    if (!targetWin.history.state || targetWin.history.state.page !== 'hacked_back_button') {
-                        targetWin.history.pushState({ page: 'hacked_back_button' }, "", href);
-                    }
-                    targetWin.addEventListener('popstate', function (event) { forceGoBack(); });
-                    targetWin.onpopstate = function () { forceGoBack(); }; // Ghi đè thêm đề phòng website xóa sự kiện
-
-                    // Vô hiệu hoá pushState của trang web để chống History Trap (Trang web cố tình giam người dùng bằng cách spam pushState)
-                    try {
-                        const origPushState = targetWin.History.prototype.pushState;
-                        targetWin.History.prototype.pushState = maskFunction(function () { return null; }, origPushState);
-                        const origReplaceState = targetWin.History.prototype.replaceState;
-                        targetWin.History.prototype.replaceState = maskFunction(function () { return null; }, origReplaceState);
-                    } catch (e) { }
-                    targetWin.document.addEventListener('mousedown', function (e) {
-                        let target = e.target.closest('a, button, [onclick], [class*="btn"], [class*="button"], [class*="back"]');
-                        if (target) {
-                            let text = (target.innerText || target.textContent || '').toLowerCase().trim();
-                            let onclickAttr = target.getAttribute('onclick') || '';
-                            let hrefAttr = target.href || '';
-                            let className = (target.getAttribute('class') || '').toLowerCase();
-
-                            if ((text.length < 50 && (text.includes('return') || text.includes('quay lại') || text.includes('trở về') || text.includes('trở lại') || text.includes('đổi nhiệm vụ') || text.includes('back'))) ||
-                                className.includes('back') ||
-                                hrefAttr.includes('history.back') ||
-                                hrefAttr.includes('history.go(-1)') ||
-                                onclickAttr.includes('history.back') ||
-                                onclickAttr.includes('history.go(-1)')) {
-                                e.preventDefault(); e.stopPropagation();
-                                forceGoBack();
-                            }
-                        }
-                    }, true);
-                }
-            } catch (e) { }
 
         } catch (e) { }
     }
 
-    // Kích hoạt Deep Fake trên Cửa sổ chính hiện tại
     applySpoofing(window);
-
-    // Kích hoạt Deep Fake trên TẤT CẢ các Iframe được tạo ẩn (Bypass cực mạnh)
-    try {
-        const originalIframeCwGet = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow').get;
-        Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
-            get: maskFunction(function () {
-                const cw = originalIframeCwGet.apply(this);
-                if (cw) applySpoofing(cw);
-                return cw;
-            }, originalIframeCwGet),
-            configurable: true
-        });
-    } catch (e) { }
-
-    try {
-        const originalIframeCdGet = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentDocument').get;
-        Object.defineProperty(HTMLIFrameElement.prototype, 'contentDocument', {
-            get: maskFunction(function () {
-                const cd = originalIframeCdGet.apply(this);
-                if (cd && cd.defaultView) applySpoofing(cd.defaultView);
-                return cd;
-            }, originalIframeCdGet),
-            configurable: true
-        });
-    } catch (e) { }
 
 }, { once: true });

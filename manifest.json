@@ -25,6 +25,8 @@
             "matches": [
                 "<all_urls>"
             ],
+            "match_about_blank": true,
+            "match_origin_as_fallback": true,
             "js": [
                 "main_world.js"
             ],
@@ -36,6 +38,8 @@
             "matches": [
                 "<all_urls>"
             ],
+            "match_about_blank": true,
+            "match_origin_as_fallback": true,
             "js": [
                 "content.js"
             ],

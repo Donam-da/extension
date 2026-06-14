@@ -1,8 +1,3 @@
-// Chặn rò rỉ IP thực qua WebRTC (Bắt buộc phải đi qua Proxy nếu có)
-chrome.privacy.network.webRTCIPHandlingPolicy.set({
-    value: 'disable_non_proxied_udp'
-});
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "GET_VALIDATED_PROFILE") {
         // Người gác cổng: Chỉ cung cấp profile cho trang web nếu có Key hợp lệ trong máy
@@ -34,7 +29,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const verMatch = profile.ua.match(/Android (\d+(?:\.\d+)*)/);
         if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
 
-        // Đồng bộ hóa sec-ch-ua với User-Agent để tránh bị Cloudflare bắt lỗi lệch Brand
         let secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Google Chrome";v="${profile.chromeMajor}"`;
         if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
             secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Microsoft Edge";v="${profile.chromeMajor}"`;
@@ -57,10 +51,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             priority: 1,
             action: {
                 type: "modifyHeaders",
-                requestHeaders: requestHeaders,
-                responseHeaders: [
-                    { header: "content-security-policy", operation: "remove" }
-                ]
+                requestHeaders: requestHeaders
             },
             condition: {
                 urlFilter: "*",
@@ -90,34 +81,5 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true });
         });
         return true; // Giữ kênh giao tiếp mở để gửi callback
-    } else if (message.type === "OPEN_CRYPTO_LOGIN") {
-        const creds = message.creds || {};
-        chrome.tabs.create({ url: "https://cryptolinkforearn.com/login" }, (tab) => {
-            const listener = function (tabId, changeInfo, updatedTab) {
-                if (tabId === tab.id && changeInfo.status === 'complete') {
-                    chrome.tabs.onUpdated.removeListener(listener);
-                    chrome.scripting.executeScript({
-                        target: { tabId: tab.id },
-                        func: (emailVal, passVal) => {
-                            setTimeout(() => {
-                                const emailInput = document.querySelector('input[name="email"], input[type="email"]');
-                                const passInput = document.querySelector('input[name="password"], input[type="password"]');
-                                if (emailInput && passInput) {
-                                    emailInput.value = emailVal;
-                                    passInput.value = passVal;
-                                    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                    passInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-                                    const btn = document.querySelector('button[type="submit"]');
-                                    if (btn) btn.click();
-                                }
-                            }, 800);
-                        },
-                        args: [creds.email || "", creds.pass || ""]
-                    }).catch(err => console.log(err));
-                }
-            };
-            chrome.tabs.onUpdated.addListener(listener);
-        });
     }
 });
