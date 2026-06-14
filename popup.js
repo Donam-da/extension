@@ -1,3 +1,16 @@
+// --- VÁ LỖI V8 RNG TRÊN ANDROID (KIWI/LEMUR) BẰNG MULBERRY32 ---
+// Thay thế hoàn toàn lõi Math.random() bằng thuật toán sinh số ngẫu nhiên nội bộ
+// Đảm bảo sinh ra hàng tỷ tổ hợp độc nhất, không bao giờ bị kẹt lại 1 thiết bị
+(function patchMathRandom() {
+    let seed = Date.now() ^ (Math.round(performance.now() * 1000));
+    Math.random = function () {
+        let t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+})();
+
 // --- HỆ THỐNG BẢN QUYỀN KẾT NỐI VỚI GITHUB GIST CỦA ADMIN ---
 const ONLINE_CONFIG_URL = "https://gist.githubusercontent.com/Donam-da/f7c09d917d09209b818bab60c42f2ca3/raw/config.json";
 let currentMachineId = "";
@@ -613,13 +626,18 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     else if (selected === "windows_pc") profile = generateWindowsProfile();
     else if (selected === "random_kiwi") profile = generateKiwiProfile();
     else {
-        profile = JSON.parse(JSON.stringify(profiles[selected]));
-        const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
-        const chromeMajor = realUaMatch ? realUaMatch[1] : "128";
-        const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
-        profile.ua = profile.ua.replace(/Chrome\/\d+\.0\.0\.0/, `Chrome/${fullChromeVer}`);
-        profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${chromeMajor}`);
-        profile.fullChromeVer = fullChromeVer;
+        // Fallback chống crash nếu cấu hình HTML sai value
+        if (!profiles[selected]) {
+            profile = generateStandardChromeProfile();
+        } else {
+            profile = JSON.parse(JSON.stringify(profiles[selected]));
+            const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
+            const chromeMajor = realUaMatch ? realUaMatch[1].split('.')[0] : "128";
+            const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
+            profile.ua = profile.ua.replace(/Chrome\/\d+\.0\.0\.0/, `Chrome/${fullChromeVer}`);
+            profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${chromeMajor}`);
+            profile.fullChromeVer = fullChromeVer;
+        }
     }
 
     // Luôn luôn tạo nhiễu ngẫu nhiên để đảm bảo mỗi lần ấn tạo là ra một máy hoàn toàn độc nhất
