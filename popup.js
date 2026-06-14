@@ -490,7 +490,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
 
     const btn = document.getElementById('apply-btn');
     const originalText = btn.textContent;
-    btn.textContent = "[ ĐANG XÓA SẠCH COOKIE... ]";
+    btn.textContent = "WAIT...";
     btn.style.background = "#ffb74d";
     btn.style.color = "#000";
     btn.disabled = true;
@@ -501,7 +501,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
             updateUI(profile);
             chrome.runtime.sendMessage({ type: "UPDATE_RULES", profile: profile });
 
-            btn.textContent = "[ THÀNH CÔNG - ĐÃ XÓA SẠCH DATA ]";
+            btn.textContent = "Success";
             btn.style.background = "#00FF41";
             btn.disabled = false;
             setTimeout(() => {

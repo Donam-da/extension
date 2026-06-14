@@ -102,7 +102,9 @@ function injectFloatingMenu() {
             border-radius: 8px; padding: 10px; display: flex;
             flex-direction: column; gap: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        .title { color: #00FF41; font-size: 12px; text-align: center; font-weight: bold; border-bottom: 1px dashed #30363d; padding-bottom: 5px; margin-bottom: 5px; }
+        .title { display: flex; justify-content: space-between; align-items: center; color: #00FF41; font-size: 12px; font-weight: bold; border-bottom: 1px dashed #30363d; padding-bottom: 5px; margin-bottom: 5px; }
+        .top-btn { cursor: pointer; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-family: Consolas, monospace; transition: all 0.2s; color: #8b949e; user-select: none; }
+        .top-btn:hover { background: #161b22; color: #c9d1d9; }
         .btn {
             background: #161b22; color: #00E5FF; border: 1px solid #30363d;
             padding: 8px; border-radius: 4px; cursor: pointer;
@@ -133,7 +135,10 @@ function injectFloatingMenu() {
     wrapper.className = 'menu-wrapper';
     wrapper.innerHTML = `
         <div class="panel" id="main-panel">
-            <div class="title">MENU NỔI<span id="btn-pin-menu" title="Ghim menu nổi này" style="cursor: pointer; padding: 0 4px; font-size: 13px; transition: 0.3s;">📌</span></div>
+            <div class="title">
+                <span id="btn-refresh" class="top-btn" title="Tải lại trang" style="color: #00E5FF;">F5</span>
+                <span id="btn-pin-menu" class="top-btn" title="Ghim menu nổi này">Ghim</span>
+            </div>
             <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
             <button class="btn" id="btn-crypto-link" style="color: #FF9800; border-color: #FF9800;">CRYPTO</button>
             <button class="btn" id="btn-open-ag" style="color: #4285F4; border-color: #4285F4;">AuTo Google</button>
@@ -141,7 +146,10 @@ function injectFloatingMenu() {
         </div>
 
         <div class="panel" id="ag-panel" style="display: none; width: 220px;">
-            <div class="title" style="color: #4285F4;">AUTO GOOGLE <span id="btn-back-main" title="Quay lại" style="cursor: pointer; padding: 0 4px; font-size: 13px; float: right; margin-top: -2px;">🔙</span></div>
+            <div class="title" style="color: #4285F4;">
+                <span>AUTO GOOGLE</span>
+                <span id="btn-back-main" class="top-btn" title="Quay lại" style="font-size: 13px; padding: 0 4px;">🔙</span>
+            </div>
             <div id="ag-list" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-bottom: 5px;"></div>
             <div style="display: flex; gap: 4px; margin-bottom: 5px;">
                 <input type="text" id="ag-input" placeholder="Nhập text mới..." style="flex: 1; background: #0D1117; color: #00E5FF; border: 1px solid #30363d; border-radius: 4px; font-size: 11px; padding: 6px; outline: none;">
@@ -278,7 +286,7 @@ function injectFloatingMenu() {
     chrome.storage.local.get(['isMenuPinned'], (data) => {
         if (data.isMenuPinned) {
             wrapper.classList.add('show');
-            pinBtn.style.filter = 'drop-shadow(0 0 3px #00FF41)';
+            pinBtn.style.color = '#00FF41';
             setTimeout(adjustMenuPosition, 50);
         }
     });
@@ -289,14 +297,19 @@ function injectFloatingMenu() {
             const newState = !data.isMenuPinned;
             chrome.storage.local.set({ isMenuPinned: newState }, () => {
                 if (newState) {
-                    pinBtn.style.filter = 'drop-shadow(0 0 3px #00FF41)';
+                    pinBtn.style.color = '#00FF41';
                     pinBtn.title = "Đã ghim (Sẽ tự động mở ở trang mới)";
                 } else {
-                    pinBtn.style.filter = 'none';
+                    pinBtn.style.color = '';
                     pinBtn.title = "Ghim menu nổi này";
                 }
             });
         });
+    });
+
+    wrapper.querySelector('#btn-refresh').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.location.reload();
     });
 
     wrapper.querySelector('#btn-change-task').addEventListener('click', () => {

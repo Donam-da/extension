@@ -225,9 +225,8 @@
             background: rgba(0, 255, 65, 0.1);
             border-color: var(--secondary);
             color: var(--secondary);
-            margin-top: 5px;
-            margin-bottom: 15px;
             font-size: 14px;
+            flex: 1;
         }
 
         #apply-btn:hover {
@@ -349,8 +348,10 @@
         <!-- MÀN HÌNH ĐĂNG NHẬP -->
         <div id="login-view" style="display: none;">
             <div class="header">
-                <h3>[ Đẹp trai có gì sai ]</h3>
-                <div class="creator">Extension created by 12A2</div>
+                <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+                    <h3>[ Đẹp trai có gì sai ]</h3>
+                    <div class="creator" style="margin-top: 0;">Extension created by 12A2</div>
+                </div>
             </div>
 
             <div class="box" style="text-align: center; border-left-color: var(--warning);">
@@ -375,8 +376,10 @@
         <!-- MÀN HÌNH LÀM VIỆC CHÍNH -->
         <div id="main-view" style="display: none;">
             <div class="header">
-                <h3>[ Browser ]</h3>
-                <div class="creator">Created by 11A2</div>
+                <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+                    <h3>[ Browser ]</h3>
+                    <div class="creator" style="margin-top: 0;">Created by 11A2</div>
+                </div>
                 <div id="key-expiry-display"
                     style="color: var(--primary); font-size: 12px; margin-top: 10px; font-weight: bold;">
                     ⏳ Hạn Key: Đang tải...
@@ -406,10 +409,10 @@
                         <option value="random_noise">Random 2</option>
                     </optgroup>
                 </select>
-                <button id="apply-btn">&gt; ÁP DỤNG CẤU HÌNH &lt;</button>
             </div>
 
             <div class="flex-row">
+                <button id="apply-btn">SET</button>
                 <button id="crypto-btn">&gt; CRYPTOLINK &lt;</button>
                 <button id="crypto-settings-btn" title="Cài đặt tài khoản">⚙</button>
             </div>
