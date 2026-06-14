@@ -5,6 +5,43 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     }
     if (!profile) return;
 
+    // --- HỆ THỐNG RADAR BẮT LỖI CLOUDFLARE TRỰC TIẾP TRÊN MÀN HÌNH ---
+    function showDebugError(msg, source, lineno, colno, error) {
+        let errStr = (msg + " " + source + " " + (error ? error.stack : '')).toLowerCase();
+        if (!errStr.includes('cloudflare') && !errStr.includes('turnstile') && !errStr.includes('challenge')) return;
+
+        const logError = () => {
+            let errBox = document.getElementById('vcl-cf-debug');
+            if (!errBox) {
+                errBox = document.createElement('div');
+                errBox.id = 'vcl-cf-debug';
+                errBox.style.cssText = 'position: fixed; top: 10px; left: 10px; z-index: 2147483647; background: rgba(13, 17, 23, 0.95); color: #ff5252; border: 2px solid #ff5252; padding: 15px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; max-width: 90vw; max-height: 50vh; overflow-y: auto; box-shadow: 0 0 20px rgba(255, 82, 82, 0.5); pointer-events: none;';
+                document.body.appendChild(errBox);
+            }
+
+            const errDiv = document.createElement('div');
+            errDiv.style.borderBottom = "1px dashed #30363d";
+            errDiv.style.marginBottom = "8px";
+            errDiv.style.paddingBottom = "8px";
+            errDiv.innerHTML = `<strong style="color:#FF9800; font-size: 13px;">[PHÁT HIỆN LỖI CLOUDFLARE]</strong><br>
+                                <b style="color: #c9d1d9;">Lỗi:</b> ${msg}<br>
+                                <b style="color: #c9d1d9;">Nguồn:</b> ${source}:${lineno}:${colno}<br>
+                                <b style="color: #c9d1d9;">Dấu vết:</b> <span style="color:#8b949e;">${error && error.stack ? error.stack.replace(/\n/g, '<br>') : 'Không có'}</span>`;
+            errBox.appendChild(errDiv);
+        };
+
+        if (document.body) logError();
+        else document.addEventListener('DOMContentLoaded', logError);
+    }
+
+    window.addEventListener('error', function (e) {
+        showDebugError(e.message, e.filename, e.lineno, e.colno, e.error);
+    }, true);
+
+    window.addEventListener('unhandledrejection', function (e) {
+        if (e.reason) showDebugError(e.reason.message || "Promise Rejection", e.reason.stack || "", 0, 0, e.reason);
+    }, true);
+
     // SỬ DỤNG WEAKMAP TOÀN CỤC: Chia sẻ chung giữa cửa sổ chính và mọi Iframe con
     const globalFnMap = new WeakMap();
 
@@ -216,6 +253,109 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 };
                 uaDataProto.getHighEntropyValues = maskFunction(wrapperUA.getHighEntropyValues, originalGetHighEntropyValues);
             }
+
+            // 9.5. Chặn rò rỉ IP qua WebRTC (Xóa STUN/TURN Servers)
+            const spoofRTC = (RTClass) => {
+                if (!RTClass) return;
+                const originalRTC = RTClass;
+                const fakeRTC = maskFunction(function (config) {
+                    let safeConfig = {};
+                    if (config) {
+                        try { safeConfig = JSON.parse(JSON.stringify(config)); }
+                        catch (e) { safeConfig = { ...config }; }
+                    }
+                    safeConfig.iceServers = [];
+                    safeConfig.iceTransportPolicy = 'relay';
+
+                    const pc = new originalRTC(safeConfig);
+                    if (pc.setConfiguration) {
+                        const origSet = pc.setConfiguration;
+                        pc.setConfiguration = maskFunction(function (cfg) {
+                            let safeCfg = cfg ? { ...cfg } : {};
+                            safeCfg.iceServers = [];
+                            safeCfg.iceTransportPolicy = 'relay';
+                            return origSet.call(this, safeCfg);
+                        }, origSet);
+                    }
+                    return pc;
+                }, originalRTC);
+                fakeRTC.prototype = originalRTC.prototype;
+                try { Object.defineProperty(fakeRTC.prototype, 'constructor', { value: fakeRTC, configurable: true, writable: true }); } catch (e) { }
+                return fakeRTC;
+            };
+            if (targetWin.RTCPeerConnection) targetWin.RTCPeerConnection = spoofRTC(targetWin.RTCPeerConnection);
+            if (targetWin.webkitRTCPeerConnection) targetWin.webkitRTCPeerConnection = spoofRTC(targetWin.webkitRTCPeerConnection);
+
+            // 9.6. Chặn Service Worker (Tránh bị soi cấu hình ngầm)
+            if (targetWin.navigator && targetWin.navigator.serviceWorker) {
+                const origRegister = targetWin.navigator.serviceWorker.register;
+                targetWin.navigator.serviceWorker.register = maskFunction(function () {
+                    return Promise.reject(new Error("Service Worker is disabled for privacy"));
+                }, origRegister);
+            }
+
+            // 10. Smart Back (Tuyệt chiêu chống giam lỏng)
+            try {
+                const hostname = targetWin.location.hostname;
+                const href = targetWin.location.href;
+                if (targetWin === targetWin.top && (hostname.includes('online') || hostname.includes('uptolink') || hostname.includes('linkhuongdan') || href.includes('/online/'))) {
+                    const backUrl = profile.lastUptoLink || 'https://uptolink.vip';
+
+                    const forceGoBack = () => {
+                        targetWin.location.href = backUrl;
+                        try {
+                            const a = targetWin.document.createElement('a');
+                            a.href = backUrl;
+                            targetWin.document.body.appendChild(a);
+                            a.click();
+                        } catch (e) { }
+                    };
+
+                    try {
+                        const origBack = targetWin.History.prototype.back;
+                        targetWin.History.prototype.back = maskFunction(function () { forceGoBack(); }, origBack);
+
+                        const origGo = targetWin.History.prototype.go;
+                        targetWin.History.prototype.go = maskFunction(function (delta) {
+                            if (delta === -1) { forceGoBack(); }
+                            else { return origGo.call(this, delta); }
+                        }, origGo);
+                    } catch (e) { }
+
+                    if (!targetWin.history.state || targetWin.history.state.page !== 'hacked_back_button') {
+                        targetWin.history.pushState({ page: 'hacked_back_button' }, "", href);
+                    }
+                    targetWin.addEventListener('popstate', function (event) { forceGoBack(); });
+                    targetWin.onpopstate = function () { forceGoBack(); };
+
+                    try {
+                        const origPushState = targetWin.History.prototype.pushState;
+                        targetWin.History.prototype.pushState = maskFunction(function () { return null; }, origPushState);
+                        const origReplaceState = targetWin.History.prototype.replaceState;
+                        targetWin.History.prototype.replaceState = maskFunction(function () { return null; }, origReplaceState);
+                    } catch (e) { }
+
+                    targetWin.document.addEventListener('mousedown', function (e) {
+                        let target = e.target.closest('a, button, [onclick], [class*="btn"], [class*="button"], [class*="back"]');
+                        if (target) {
+                            let text = (target.innerText || target.textContent || '').toLowerCase().trim();
+                            let onclickAttr = target.getAttribute('onclick') || '';
+                            let hrefAttr = target.href || '';
+                            let className = (target.getAttribute('class') || '').toLowerCase();
+
+                            if ((text.length < 50 && (text.includes('return') || text.includes('quay lại') || text.includes('trở về') || text.includes('trở lại') || text.includes('đổi nhiệm vụ') || text.includes('back'))) ||
+                                className.includes('back') ||
+                                hrefAttr.includes('history.back') ||
+                                hrefAttr.includes('history.go(-1)') ||
+                                onclickAttr.includes('history.back') ||
+                                onclickAttr.includes('history.go(-1)')) {
+                                e.preventDefault(); e.stopPropagation();
+                                forceGoBack();
+                            }
+                        }
+                    }, true);
+                }
+            } catch (e) { }
 
         } catch (e) { }
     }

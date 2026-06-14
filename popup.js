@@ -588,6 +588,39 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     });
 });
 
+document.getElementById('crypto-settings-btn').addEventListener('click', () => {
+    const box = document.getElementById('crypto-settings-box');
+    if (box.style.display === 'none' || box.style.display === '') {
+        box.style.display = 'block';
+        chrome.storage.local.get(['cryptoEmail', 'cryptoPass'], (data) => {
+            if (data.cryptoEmail) document.getElementById('crypto-email').value = data.cryptoEmail;
+            if (data.cryptoPass) document.getElementById('crypto-pass').value = data.cryptoPass;
+        });
+    } else {
+        box.style.display = 'none';
+    }
+});
+
+document.getElementById('save-crypto-btn').addEventListener('click', () => {
+    const email = document.getElementById('crypto-email').value.trim();
+    const pass = document.getElementById('crypto-pass').value.trim();
+    chrome.storage.local.set({ cryptoEmail: email, cryptoPass: pass }, () => {
+        const btn = document.getElementById('save-crypto-btn');
+        const origText = btn.textContent;
+        btn.textContent = "ĐÃ LƯU!";
+        setTimeout(() => btn.textContent = origText, 2000);
+    });
+});
+
+document.getElementById('crypto-btn').addEventListener('click', () => {
+    chrome.storage.local.get(['cryptoEmail', 'cryptoPass'], (data) => {
+        chrome.runtime.sendMessage({
+            type: "OPEN_CRYPTO_LOGIN",
+            creds: { email: data.cryptoEmail || "", pass: data.cryptoPass || "" }
+        });
+    });
+});
+
 // Gói logic khởi chạy App chính vào một hàm để gọi sau khi đăng nhập thành công
 function loadMainApp() {
     chrome.storage.local.get(['spoofProfile'], (data) => {

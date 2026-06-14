@@ -81,5 +81,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true });
         });
         return true; // Giữ kênh giao tiếp mở để gửi callback
+    } else if (message.type === "OPEN_CRYPTO_LOGIN") {
+        const creds = message.creds || {};
+        chrome.tabs.create({ url: "https://cryptolinkforearn.com/login" }, (tab) => {
+            const listener = function (tabId, changeInfo, updatedTab) {
+                if (tabId === tab.id && changeInfo.status === 'complete') {
+                    chrome.tabs.onUpdated.removeListener(listener);
+                    chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        func: (emailVal, passVal) => {
+                            setTimeout(() => {
+                                const emailInput = document.querySelector('input[name="email"], input[type="email"]');
+                                const passInput = document.querySelector('input[name="password"], input[type="password"]');
+                                if (emailInput && passInput) {
+                                    emailInput.value = emailVal;
+                                    passInput.value = passVal;
+                                    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                    passInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                                    const btn = document.querySelector('button[type="submit"]');
+                                    if (btn) btn.click();
+                                }
+                            }, 800);
+                        },
+                        args: [creds.email || "", creds.pass || ""]
+                    }).catch(err => console.log(err));
+                }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+        });
     }
 });
