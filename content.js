@@ -258,6 +258,26 @@ function injectFloatingMenu() {
         chrome.storage.local.set({ menuPosX: container.style.left, menuPosY: container.style.top });
     }
 
+    function checkBounds() {
+        if (container.style.left && container.style.left !== 'auto') {
+            let currentLeft = parseInt(container.style.left, 10) || 0;
+            let currentTop = parseInt(container.style.top, 10) || 0;
+
+            let maxLeft = Math.max(0, window.innerWidth - container.offsetWidth);
+            let maxTop = Math.max(0, window.innerHeight - container.offsetHeight);
+
+            let newLeft = Math.min(Math.max(0, currentLeft), maxLeft);
+            let newTop = Math.min(Math.max(0, currentTop), maxTop);
+
+            container.style.left = newLeft + 'px';
+            container.style.top = newTop + 'px';
+
+            adjustMenuPosition();
+        }
+    }
+
+    window.addEventListener('resize', checkBounds);
+
     // Tải lại vị trí đã lưu trước đó (nếu có)
     chrome.storage.local.get(['menuPosX', 'menuPosY'], (data) => {
         if (data.menuPosX && data.menuPosY) {
@@ -265,7 +285,10 @@ function injectFloatingMenu() {
             container.style.right = 'auto';
             container.style.left = data.menuPosX;
             container.style.top = data.menuPosY;
-            setTimeout(adjustMenuPosition, 50); // Cập nhật hướng mở sau khi load vị trí cũ
+            setTimeout(() => {
+                checkBounds(); // Kéo lại vào màn hình nếu lúc trước lưu ở màn hình to hơn
+                adjustMenuPosition(); // Cập nhật hướng mở sau khi load vị trí cũ
+            }, 50);
         }
     });
 
