@@ -43,29 +43,6 @@ document.addEventListener('mousedown', function (e) {
     }
 }, true);
 
-// 2.5. Auto Google Logic (Tự động điền Text và Enter trên Google)
-if (window.location.hostname.includes('google.') && window.location.pathname === '/') {
-    chrome.storage.local.get(['autoGoogleText'], (data) => {
-        if (data.autoGoogleText) {
-            const doGoogleSearch = () => {
-                const searchBox = document.querySelector('textarea[name="q"], input[name="q"]');
-                if (searchBox) {
-                    searchBox.value = data.autoGoogleText;
-                    searchBox.dispatchEvent(new Event('input', { bubbles: true }));
-                    const form = searchBox.closest('form');
-                    setTimeout(() => {
-                        if (form) form.submit();
-                        else searchBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                    }, 100); // Đợi 100ms để mô phỏng người thật thao tác
-                    chrome.storage.local.remove('autoGoogleText'); // Xóa lệnh sau khi chạy xong để không bị lặp
-                } else setTimeout(doGoogleSearch, 100);
-            };
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', doGoogleSearch);
-            else doGoogleSearch();
-        }
-    });
-}
-
 // 3. TẠO ICON NỔI (QUICK MENU) TRÊN MỌI TRANG WEB
 function injectFloatingMenu() {
     // Chỉ tạo nút nổi trên cửa sổ duyệt web chính, ngăn không cho tạo bên trong các iframe (như popup của Google)
@@ -116,17 +93,6 @@ function injectFloatingMenu() {
         .btn.crypto:hover { background: #B300FF; color: #fff; }
         .btn.close { color: #ff5252; border-color: #ff5252; }
         .btn.close:hover { background: #ff5252; color: #000; }
-        
-        /* Auto Google Styles */
-        .ag-item {
-            display: flex; justify-content: space-between; align-items: center;
-            background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 6px;
-            cursor: pointer; font-size: 11px; color: #c9d1d9; transition: border 0.2s;
-        }
-        .ag-item:hover { border-color: #00E5FF; }
-        .ag-item.selected { border-color: #4285F4; color: #4285F4; background: #0d1117; font-weight: bold; }
-        .ag-btn-del { color: #ff5252; cursor: pointer; font-weight: bold; padding: 0 4px; }
-        .ag-btn-del:hover { background: #ff5252; color: #fff; border-radius: 2px; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
     `;
@@ -141,21 +107,7 @@ function injectFloatingMenu() {
             </div>
             <button class="btn crypto" id="btn-change-task">Đổi Nhiệm Vụ</button>
             <button class="btn" id="btn-crypto-link" style="color: #FF9800; border-color: #FF9800;">CRYPTO</button>
-            <button class="btn" id="btn-open-ag" style="color: #4285F4; border-color: #4285F4;">AuTo Google</button>
             <button class="btn close" id="btn-hide">Ẩn nút nổi</button>
-        </div>
-
-        <div class="panel" id="ag-panel" style="display: none; width: 220px;">
-            <div class="title" style="color: #4285F4;">
-                <span>AUTO GOOGLE</span>
-                <span id="btn-back-main" class="top-btn" title="Quay lại" style="font-size: 13px; padding: 0 4px;">🔙</span>
-            </div>
-            <div id="ag-list" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-bottom: 5px;"></div>
-            <div style="display: flex; gap: 4px; margin-bottom: 5px;">
-                <input type="text" id="ag-input" placeholder="Nhập text mới..." style="flex: 1; background: #0D1117; color: #00E5FF; border: 1px solid #30363d; border-radius: 4px; font-size: 11px; padding: 6px; outline: none;">
-                <button id="ag-add" style="background: #161b22; color: #00FF41; border: 1px solid #30363d; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; padding: 0 8px;">Thêm</button>
-            </div>
-            <button class="btn" id="ag-fill" style="background: #4285F4; color: #fff; border-color: #4285F4; font-size: 12px;">&gt; ĐIỀN VÀO GOOGLE &lt;</button>
         </div>
     `;
 
@@ -356,90 +308,6 @@ function injectFloatingMenu() {
 
     // Switching Panels
     const mainPanel = wrapper.querySelector('#main-panel');
-    const agPanel = wrapper.querySelector('#ag-panel');
-
-    wrapper.querySelector('#btn-open-ag').addEventListener('click', () => {
-        mainPanel.style.display = 'none';
-        agPanel.style.display = 'flex';
-        loadAgList();
-    });
-    wrapper.querySelector('#btn-back-main').addEventListener('click', () => {
-        agPanel.style.display = 'none';
-        mainPanel.style.display = 'flex';
-    });
-
-    // Auto Google Logic
-    let agTexts = [];
-    let agSelectedIdx = -1;
-    const listEl = wrapper.querySelector('#ag-list');
-    const inputEl = wrapper.querySelector('#ag-input');
-
-    const renderAgList = () => {
-        listEl.innerHTML = '';
-        agTexts.forEach((text, idx) => {
-            const item = document.createElement('div');
-            item.className = 'ag-item' + (idx === agSelectedIdx ? ' selected' : '');
-
-            const textSpan = document.createElement('span');
-            textSpan.textContent = text;
-            textSpan.style.cssText = 'flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px;';
-
-            const delBtn = document.createElement('span');
-            delBtn.textContent = 'X';
-            delBtn.className = 'ag-btn-del';
-            delBtn.title = 'Xóa';
-            delBtn.onclick = (e) => {
-                e.stopPropagation();
-                agTexts.splice(idx, 1);
-                if (agSelectedIdx === idx) agSelectedIdx = -1;
-                else if (agSelectedIdx > idx) agSelectedIdx--;
-                chrome.storage.local.set({ autoGoogleList: agTexts });
-                renderAgList();
-            };
-
-            item.onclick = () => {
-                agSelectedIdx = idx;
-                renderAgList();
-            };
-
-            item.appendChild(textSpan);
-            item.appendChild(delBtn);
-            listEl.appendChild(item);
-        });
-    };
-
-    const loadAgList = () => {
-        chrome.storage.local.get(['autoGoogleList'], (data) => {
-            if (data.autoGoogleList) agTexts = data.autoGoogleList;
-            renderAgList();
-        });
-    };
-
-    wrapper.querySelector('#ag-add').addEventListener('click', () => {
-        const val = inputEl.value.trim();
-        if (val) {
-            agTexts.push(val);
-            chrome.storage.local.set({ autoGoogleList: agTexts });
-            inputEl.value = '';
-            agSelectedIdx = agTexts.length - 1; // Auto select newly added
-            renderAgList();
-        }
-    });
-
-    inputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') wrapper.querySelector('#ag-add').click();
-    });
-
-    wrapper.querySelector('#ag-fill').addEventListener('click', () => {
-        if (agSelectedIdx >= 0 && agSelectedIdx < agTexts.length) {
-            const text = agTexts[agSelectedIdx];
-            chrome.storage.local.set({ autoGoogleText: text }, () => {
-                window.open('https://www.google.com/', '_blank');
-            });
-        } else {
-            alert('Vui lòng chọn 1 dòng text trước khi Điền!');
-        }
-    });
 
     shadow.appendChild(style); shadow.appendChild(wrapper); shadow.appendChild(fab);
     document.body.appendChild(container);
@@ -458,15 +326,6 @@ chrome.storage.local.get(['lastUptoLink'], (data) => {
         // Bổ sung lastUptoLink vào profile để truyền sang main_world
         response.profile.lastUptoLink = lastLink;
         const profileStr = JSON.stringify(response.profile).replace(/</g, '\\u003c');
-
-        try {
-            const script = document.createElement('script');
-            script.id = 'spoof-profile-data';
-            script.type = 'application/json';
-            script.textContent = profileStr;
-            const root = document.head || document.documentElement || document;
-            root.appendChild(script);
-        } catch (e) { }
 
         // Truyền object đã parse qua để tránh lỗi undefine trên một số phiên bản Chrome mới
         window.dispatchEvent(new CustomEvent("Bypass_SpoofProfile_Init", { detail: JSON.parse(profileStr) }));

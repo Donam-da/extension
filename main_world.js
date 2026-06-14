@@ -5,35 +5,71 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     }
     if (!profile) return;
 
+    // --- HỆ THỐNG RADAR BẮT LỖI CLOUDFLARE TRỰC TIẾP TRÊN MÀN HÌNH ---
+    function showDebugError(msg, source, lineno, colno, error) {
+        let errStr = (msg + " " + source + " " + (error ? error.stack : '')).toLowerCase();
+        if (!errStr.includes('cloudflare') && !errStr.includes('turnstile') && !errStr.includes('challenge')) return;
+
+        const logError = () => {
+            let errBox = document.getElementById('vcl-cf-debug');
+            if (!errBox) {
+                errBox = document.createElement('div');
+                errBox.id = 'vcl-cf-debug';
+                errBox.style.cssText = 'position: fixed; top: 10px; left: 10px; z-index: 2147483647; background: rgba(13, 17, 23, 0.95); color: #ff5252; border: 2px solid #ff5252; padding: 15px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; max-width: 90vw; max-height: 50vh; overflow-y: auto; box-shadow: 0 0 20px rgba(255, 82, 82, 0.5); pointer-events: none;';
+                document.body.appendChild(errBox);
+            }
+
+            const errDiv = document.createElement('div');
+            errDiv.style.borderBottom = "1px dashed #30363d";
+            errDiv.style.marginBottom = "8px";
+            errDiv.style.paddingBottom = "8px";
+            errDiv.innerHTML = `<strong style="color:#FF9800; font-size: 13px;">[PHÁT HIỆN LỖI CLOUDFLARE]</strong><br>
+                                <b style="color: #c9d1d9;">Lỗi:</b> ${msg}<br>
+                                <b style="color: #c9d1d9;">Nguồn:</b> ${source}:${lineno}:${colno}<br>
+                                <b style="color: #c9d1d9;">Dấu vết:</b> <span style="color:#8b949e;">${error && error.stack ? error.stack.replace(/\n/g, '<br>') : 'Không có'}</span>`;
+            errBox.appendChild(errDiv);
+        };
+
+        if (document.body) logError();
+        else document.addEventListener('DOMContentLoaded', logError);
+    }
+
+    window.addEventListener('error', function (e) {
+        showDebugError(e.message, e.filename, e.lineno, e.colno, e.error);
+    }, true);
+
+    window.addEventListener('unhandledrejection', function (e) {
+        if (e.reason) showDebugError(e.reason.message || "Promise Rejection", e.reason.stack || "", 0, 0, e.reason);
+    }, true);
+
     // KỸ THUẬT VƯỢT MẶT TOSTRING() TOÀN CẦU (Không dùng Proxy để tránh bị phát hiện)
-    // SỬ DỤNG WEAKMAP: Giấu kín tuyệt đối hàm gốc khỏi sự nhòm ngó của Cloudflare Turnstile
-    const fnMap = new WeakMap();
-    const originalToString = Function.prototype.toString;
-    Function.prototype.toString = function toString() {
-        if (fnMap.has(this)) return originalToString.call(fnMap.get(this));
-        if (this === Function.prototype.toString) return originalToString.call(originalToString);
-        return originalToString.call(this);
-    };
-    fnMap.set(Function.prototype.toString, originalToString);
+    // SỬ DỤNG WEAKMAP TOÀN CỤC: Chia sẻ chung giữa cửa sổ chính và mọi Iframe con
+    const globalFnMap = new WeakMap();
 
     const maskFunction = (fakeFn, originalFn) => {
-        fnMap.set(fakeFn, originalFn);
+        globalFnMap.set(fakeFn, originalFn);
         if (originalFn && originalFn.name) {
             try { Object.defineProperty(fakeFn, 'name', { value: originalFn.name, configurable: true }); } catch (e) { }
         }
         return fakeFn;
     };
 
-    const defineMaskedGetter = (obj, prop, value) => {
+    const defineMaskedGetter = (obj, prop, value, expectedClassName) => {
         try {
             const originalDesc = Object.getOwnPropertyDescriptor(obj, prop);
-            const fakeGetter = function () { return value; };
+            const fakeGetter = function () {
+                if (expectedClassName) {
+                    // Sử dụng Object.prototype.toString để kiểm tra chính xác class xuyên Iframe (Cross-realm), giống hệt hành vi native C++
+                    if (Object.prototype.toString.call(this) !== `[object ${expectedClassName}]`) throw new TypeError("Illegal invocation");
+                }
+                return value;
+            };
             if (originalDesc && originalDesc.get) {
-                fnMap.set(fakeGetter, originalDesc.get);
+                globalFnMap.set(fakeGetter, originalDesc.get);
             } else {
-                fnMap.set(fakeGetter, function () { return "function get " + prop + "() { [native code] }"; });
+                globalFnMap.set(fakeGetter, function () { return "function get " + prop + "() { [native code] }"; });
             }
-            Object.defineProperty(obj, prop, { get: fakeGetter, configurable: true, enumerable: true });
+            Object.defineProperty(obj, prop, { get: fakeGetter, set: undefined, configurable: true, enumerable: true });
         } catch (e) { }
     };
 
@@ -51,50 +87,40 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             if (spoofedWindows.has(targetWin)) return;
             spoofedWindows.add(targetWin);
 
+            // 0. BẢO VỆ HÀM TOSTRING() ĐỘC LẬP TRÊN TỪNG IFRAME (Tuyệt chiêu tàng hình đa lớp)
+            if (targetWin.Function && targetWin.Function.prototype && targetWin.Function.prototype.toString) {
+                const origToString = targetWin.Function.prototype.toString;
+                // Đảm bảo không bọc lại 2 lần gây lỗi đệ quy
+                if (!globalFnMap.has(origToString)) {
+                    const fakeToString = function toString() {
+                        if (globalFnMap.has(this)) return origToString.call(globalFnMap.get(this));
+                        if (this === targetWin.Function.prototype.toString) return origToString.call(origToString);
+                        return origToString.call(this);
+                    };
+                    targetWin.Function.prototype.toString = fakeToString;
+                    globalFnMap.set(fakeToString, origToString);
+                    globalFnMap.set(origToString, origToString);
+                }
+            }
+
             // 1. Fake Navigator
-            defineMaskedGetter(targetWin.Navigator.prototype, 'userAgent', profile.ua);
-            defineMaskedGetter(targetWin.Navigator.prototype, 'platform', profile.platform);
-            defineMaskedGetter(targetWin.Navigator.prototype, 'hardwareConcurrency', profile.hardwareConcurrency);
-            defineMaskedGetter(targetWin.Navigator.prototype, 'deviceMemory', profile.deviceMemory);
-            defineMaskedGetter(targetWin.Navigator.prototype, 'vendor', profile.navigatorVendor || "Google Inc.");
-            defineMaskedGetter(targetWin.Navigator.prototype, 'webdriver', false);
-            defineMaskedGetter(targetWin.Navigator.prototype, 'appVersion', profile.ua.replace(/^Mozilla\//, ''));
+            defineMaskedGetter(targetWin.Navigator.prototype, 'userAgent', profile.ua, "Navigator");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'platform', profile.platform, "Navigator");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'hardwareConcurrency', profile.hardwareConcurrency, "Navigator");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'deviceMemory', profile.deviceMemory, "Navigator");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'vendor', profile.navigatorVendor || "Google Inc.", "Navigator");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'webdriver', false, "Navigator");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'appVersion', profile.ua.replace(/^Mozilla\//, ''), "Navigator");
 
             // 1.5. Fake Touch Support
             if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
-                defineMaskedGetter(targetWin.Navigator.prototype, 'maxTouchPoints', 5);
+                defineMaskedGetter(targetWin.Navigator.prototype, 'maxTouchPoints', 5, "Navigator");
                 if (!('ontouchstart' in targetWin)) {
                     targetWin.ontouchstart = null;
                     try { Object.defineProperty(targetWin, 'ontouchstart', { value: null, writable: true, configurable: true, enumerable: true }); } catch (e) { }
                 }
-                try {
-                    const fakePlugins = Object.create(targetWin.PluginArray.prototype);
-                    Object.defineProperty(fakePlugins, 'length', { value: 0 });
-                    Object.defineProperty(targetWin.Navigator.prototype, 'plugins', { get: () => fakePlugins, configurable: true });
-
-                    const fakeMimeTypes = Object.create(targetWin.MimeTypeArray.prototype);
-                    Object.defineProperty(fakeMimeTypes, 'length', { value: 0 });
-                    Object.defineProperty(targetWin.Navigator.prototype, 'mimeTypes', { get: () => fakeMimeTypes, configurable: true });
-                } catch (e) { }
+                // Đã gỡ bỏ fake plugins/mimeTypes vì Kiwi Browser vốn đã tự làm trống array một cách chuẩn chỉ. Can thiệp thêm sẽ dễ bị lộ.
             }
-
-            // 2. Fake Screen Resolution
-            if (targetWin.Screen) {
-                defineMaskedGetter(targetWin.Screen.prototype, 'width', profile.screenWidth);
-                defineMaskedGetter(targetWin.Screen.prototype, 'height', profile.screenHeight);
-                defineMaskedGetter(targetWin.Screen.prototype, 'availWidth', profile.screenWidth);
-                defineMaskedGetter(targetWin.Screen.prototype, 'availHeight', profile.screenHeight - 40);
-                defineMaskedGetter(targetWin.Screen.prototype, 'colorDepth', profile.colorDepth);
-                defineMaskedGetter(targetWin.Screen.prototype, 'pixelDepth', profile.colorDepth);
-            }
-
-            try {
-                Object.defineProperty(targetWin, 'innerWidth', { get: () => profile.screenWidth, configurable: true });
-                Object.defineProperty(targetWin, 'innerHeight', { get: () => profile.screenHeight, configurable: true });
-                Object.defineProperty(targetWin, 'outerWidth', { get: () => profile.screenWidth, configurable: true });
-                Object.defineProperty(targetWin, 'outerHeight', { get: () => profile.screenHeight + 85, configurable: true });
-                Object.defineProperty(targetWin, 'devicePixelRatio', { get: () => profile.dsf || 2.5, configurable: true });
-            } catch (e) { }
 
             // 3. Deep Fake WebGL
             if (targetWin.WebGLRenderingContext) {
@@ -114,27 +140,17 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 }, originalGetParameter2);
             }
 
-            // 5. Deep Fake Audio
-            if (targetWin.AudioBuffer) {
-                const originalGetChannelData = targetWin.AudioBuffer.prototype.getChannelData;
-                targetWin.AudioBuffer.prototype.getChannelData = maskFunction(function (channel) {
-                    const data = originalGetChannelData.call(this, channel);
-                    if (data && data.length > 0) {
-                        data[0] += profile.audioNoise;
-                    }
-                    return data;
-                }, originalGetChannelData);
-            }
-
             // 6. Fake window.chrome
-            if (!targetWin.chrome) {
-                targetWin.chrome = {
-                    runtime: {},
-                    loadTimes: maskFunction(function () { return {}; }, function loadTimes() { return {}; }),
-                    csi: maskFunction(function () { return {}; }, function csi() { return {}; })
-                };
-            } else if ((profile.ua.includes("Mobile") || profile.ua.includes("Android")) && targetWin.chrome.app) {
-                try { delete targetWin.chrome.app; } catch (e) { }
+            // TẨY SẠCH DẤU VẾT KIWI BROWSER: Chrome Mobile thật KHÔNG BAO GIỜ có các API Extension
+            // Cloudflare phát hiện Kiwi giả danh Chrome vì sự tồn tại của chrome.runtime!
+            if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
+                if (targetWin.chrome) {
+                    const extApis = ['runtime', 'extension', 'app', 'webstore', 'management'];
+                    extApis.forEach(api => {
+                        try { delete targetWin.chrome[api]; } catch (e) { }
+                        try { Object.defineProperty(targetWin.chrome, api, { value: undefined, configurable: true }); } catch (e) { }
+                    });
+                }
             }
 
             // 7. Client Hints (userAgentData)
@@ -170,9 +186,9 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
 
                 const uaDataProto = Object.getPrototypeOf(targetWin.navigator.userAgentData);
-                defineMaskedGetter(uaDataProto, 'brands', fakeBrands);
-                defineMaskedGetter(uaDataProto, 'mobile', profile.ua.includes("Mobile"));
-                defineMaskedGetter(uaDataProto, 'platform', fakePlatform);
+                defineMaskedGetter(uaDataProto, 'brands', fakeBrands, "NavigatorUAData");
+                defineMaskedGetter(uaDataProto, 'mobile', profile.ua.includes("Mobile"), "NavigatorUAData");
+                defineMaskedGetter(uaDataProto, 'platform', fakePlatform, "NavigatorUAData");
 
                 const originalGetHighEntropyValues = uaDataProto.getHighEntropyValues;
                 uaDataProto.getHighEntropyValues = maskFunction(function (hints) {
@@ -189,33 +205,6 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                         return fakeValues;
                     });
                 }, originalGetHighEntropyValues);
-            }
-
-            // 9. Fake DOMRect (Chống thuật toán kiểm tra kích thước đồ hoạ của CreepJS)
-            if (targetWin.Element) {
-                const originalGetClientRects = targetWin.Element.prototype.getClientRects;
-                targetWin.Element.prototype.getClientRects = maskFunction(function () {
-                    const rects = originalGetClientRects.call(this);
-                    // Bỏ qua thẻ CANVAS và DIV vì Turnstile dùng chúng để đo đạc pixel chính xác
-                    if (this.tagName !== 'CANVAS' && this.tagName !== 'DIV') {
-                        for (let i = 0; i < rects.length; i++) {
-                            try { Object.defineProperty(rects[i], 'width', { value: rects[i].width + (profile.canvasR * 0.0001), configurable: true }); } catch (e) { }
-                        }
-                    }
-                    return rects;
-                }, originalGetClientRects);
-
-                const originalGetBoundingClientRect = targetWin.Element.prototype.getBoundingClientRect;
-                targetWin.Element.prototype.getBoundingClientRect = maskFunction(function () {
-                    const rect = originalGetBoundingClientRect.call(this);
-                    if (this.tagName !== 'CANVAS' && this.tagName !== 'DIV') {
-                        try {
-                            Object.defineProperty(rect, 'width', { value: rect.width + (profile.canvasR * 0.0001), configurable: true });
-                            Object.defineProperty(rect, 'height', { value: rect.height + (profile.canvasG * 0.0001), configurable: true });
-                        } catch (e) { }
-                    }
-                    return rect;
-                }, originalGetBoundingClientRect);
             }
 
             // 9.5. Chặn rò rỉ IP qua WebRTC (Xóa STUN/TURN Servers)
