@@ -140,13 +140,15 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             }
 
             // 1. Fake Navigator
-            defineMaskedGetter(targetWin.Navigator.prototype, 'userAgent', profile.ua, "Navigator");
-            defineMaskedGetter(targetWin.Navigator.prototype, 'platform', profile.platform, "Navigator");
+            if (!profile.skipUaFake) {
+                defineMaskedGetter(targetWin.Navigator.prototype, 'userAgent', profile.ua, "Navigator");
+                defineMaskedGetter(targetWin.Navigator.prototype, 'platform', profile.platform, "Navigator");
+                defineMaskedGetter(targetWin.Navigator.prototype, 'appVersion', profile.ua.replace(/^Mozilla\//, ''), "Navigator");
+            }
             defineMaskedGetter(targetWin.Navigator.prototype, 'hardwareConcurrency', profile.hardwareConcurrency, "Navigator");
             defineMaskedGetter(targetWin.Navigator.prototype, 'deviceMemory', profile.deviceMemory, "Navigator");
             defineMaskedGetter(targetWin.Navigator.prototype, 'vendor', profile.navigatorVendor || "Google Inc.", "Navigator");
             defineMaskedGetter(targetWin.Navigator.prototype, 'webdriver', false, "Navigator");
-            defineMaskedGetter(targetWin.Navigator.prototype, 'appVersion', profile.ua.replace(/^Mozilla\//, ''), "Navigator");
 
             // 1.5. Fake Touch Support
             if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
@@ -193,13 +195,79 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 targetWin.WebGL2RenderingContext.prototype.getParameter = maskFunction(wrapper2.getParameter, originalGetParameter2);
             }
 
+            // 4. Deep Fake Canvas (Nhiễu vân tay đồ họa)
+            if (profile.canvasR && targetWin.HTMLCanvasElement) {
+                const origGetImageData = targetWin.CanvasRenderingContext2D.prototype.getImageData;
+                const wrapperCanvas = {
+                    getImageData(x, y, w, h) {
+                        const imageData = origGetImageData.call(this, x, y, w, h);
+                        if (imageData && imageData.data) {
+                            for (let i = 0; i < imageData.data.length; i += 4) {
+                                imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + profile.canvasR));
+                                imageData.data[i + 1] = Math.min(255, Math.max(0, imageData.data[i + 1] + profile.canvasG));
+                                imageData.data[i + 2] = Math.min(255, Math.max(0, imageData.data[i + 2] + profile.canvasB));
+                            }
+                        }
+                        return imageData;
+                    }
+                };
+                targetWin.CanvasRenderingContext2D.prototype.getImageData = maskFunction(wrapperCanvas.getImageData, origGetImageData);
+
+                const origToDataURL = targetWin.HTMLCanvasElement.prototype.toDataURL;
+                const wrapperDataURL = {
+                    toDataURL(type, encoderOptions) {
+                        const context = this.getContext('2d');
+                        if (context && profile.canvasR) {
+                            try {
+                                const imageData = origGetImageData.call(context, 0, 0, this.width, this.height);
+                                if (imageData && imageData.data) {
+                                    for (let i = 0; i < imageData.data.length; i += 4) {
+                                        imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + profile.canvasR));
+                                        imageData.data[i + 1] = Math.min(255, Math.max(0, imageData.data[i + 1] + profile.canvasG));
+                                        imageData.data[i + 2] = Math.min(255, Math.max(0, imageData.data[i + 2] + profile.canvasB));
+                                    }
+                                    context.putImageData(imageData, 0, 0);
+                                }
+                            } catch (e) { }
+                        }
+                        return origToDataURL.call(this, type, encoderOptions);
+                    }
+                };
+                targetWin.HTMLCanvasElement.prototype.toDataURL = maskFunction(wrapperDataURL.toDataURL, origToDataURL);
+            }
+
+            // 5. Deep Fake Audio (Nhiễu vân tay âm thanh)
+            if (profile.audioNoise && targetWin.AudioBuffer) {
+                const origGetChannelData = targetWin.AudioBuffer.prototype.getChannelData;
+                const wrapperAudio = {
+                    getChannelData(channel) {
+                        const data = origGetChannelData.call(this, channel);
+                        for (let i = 0; i < data.length; i += 100) {
+                            data[i] += profile.audioNoise;
+                        }
+                        return data;
+                    }
+                };
+                targetWin.AudioBuffer.prototype.getChannelData = maskFunction(wrapperAudio.getChannelData, origGetChannelData);
+            }
+
             // 6. Fake window.chrome
             if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
-                try { delete targetWin.chrome; } catch (e) { }
+                try {
+                    // KHÔNG ĐƯỢC XÓA TOÀN BỘ targetWin.chrome vì Chrome Mobile thật vẫn có đối tượng này!
+                    // Quét và xóa TẤT CẢ các API của Extension, chỉ chừa lại csi và loadTimes chuẩn của Chrome Mobile.
+                    if (targetWin.chrome) {
+                        for (let key in targetWin.chrome) {
+                            if (key !== 'csi' && key !== 'loadTimes') {
+                                try { delete targetWin.chrome[key]; } catch (e) { }
+                            }
+                        }
+                    }
+                } catch (e) { }
             }
 
             // 7. Client Hints (userAgentData)
-            if (targetWin.navigator && targetWin.navigator.userAgentData) {
+            if (targetWin.navigator && targetWin.navigator.userAgentData && !profile.skipUaFake) {
                 let brandName = "Google Chrome";
                 let brandVer = profile.chromeMajor;
 
@@ -215,9 +283,11 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
                 let fakeBrands = [
                     { brand: "Not/A)Brand", version: "8" },
-                    { brand: "Chromium", version: profile.chromeMajor },
-                    { brand: brandName, version: brandVer }
+                    { brand: "Chromium", version: profile.chromeMajor }
                 ];
+                if (!profile.isKiwi) {
+                    fakeBrands.push({ brand: brandName, version: brandVer });
+                }
                 let fakePlatform = profile.platform.includes("Win") ? "Windows" : profile.platform;
                 if (profile.platform.includes("Linux") && profile.ua.includes("Android")) fakePlatform = "Android";
                 if (profile.platform.includes("Mac")) fakePlatform = "macOS";

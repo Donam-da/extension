@@ -481,9 +481,18 @@ function generateStandardChromeProfile() {
 
     const androidVer = Math.floor(Math.random() * 4) + 11; // Rải đều Android từ 11 đến 14
 
-    // FAKE PHIÊN BẢN CHROME SIÊU ĐA DẠNG: Từ v70 đến v135, sinh ra hàng chục triệu tổ hợp
-    const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
-    const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
+    // ĐỒNG BỘ ENGINE: LinkTot soi Feature Detection rất gắt.
+    // Bắt buộc lấy Phiên bản lõi thật để không mâu thuẫn API, lấy ĐÚNG số Build thật để không bị lộ.
+    const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
+    let fullChromeVer = "";
+    let chromeMajor = "128";
+    if (realUaMatch) {
+        fullChromeVer = realUaMatch[1];
+        chromeMajor = fullChromeVer.split('.')[0];
+    } else {
+        chromeMajor = (Math.floor(Math.random() * 10) + 120).toString();
+        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
+    }
 
     return {
         name: `Chrome Chuẩn | ${devName} (v${chromeMajor})`,
@@ -501,7 +510,7 @@ function generateStandardChromeProfile() {
 
 function generateWindowsProfile() {
     // ĐỒNG BỘ ENGINE CHO KỊCH BẢN WINDOWS PC: Dùng CHÍNH XÁC chuỗi phiên bản Chrome thật của trình duyệt hiện tại
-    const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
+    const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
     let fullChromeVer = "";
     let chromeMajor = "128";
     if (realUaMatch) {
@@ -528,6 +537,39 @@ function generateWindowsProfile() {
     };
 }
 
+function generateKiwiProfile() {
+    // KỊCH BẢN 4: KHÔNG ĐỘNG CHẠM VÀO BẤT CỨ THÔNG SỐ DANH TÍNH NÀO CỦA TRÌNH DUYỆT
+    // Giữ nguyên 100% User-Agent, Platform thật để vượt qua bài test tính toàn vẹn của Cloudflare
+    const originalUa = navigator.userAgent;
+    const realUaMatch = originalUa.match(/Chrome\/([0-9.]+)/);
+    const chromeMajor = realUaMatch ? realUaMatch[1].split('.')[0] : "128";
+
+    const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
+    const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
+
+    let vendor = "Qualcomm";
+    let gpu = "Adreno (TM) " + ["610", "618", "620", "640", "650", "730", "740", "750"][Math.floor(Math.random() * 8)];
+    if (Math.random() > 0.7) {
+        vendor = "ARM";
+        gpu = "Mali-G7" + ["10", "15", "8"][Math.floor(Math.random() * 3)];
+    }
+
+    return {
+        name: `Kiwi Mobile (Giữ nguyên UA v${chromeMajor})`,
+        ua: originalUa,
+        platform: navigator.platform,
+        hardwareConcurrency: [4, 6, 8][Math.floor(Math.random() * 3)],
+        deviceMemory: [4, 6, 8, 12][Math.floor(Math.random() * 4)],
+        screenWidth: w,
+        screenHeight: h,
+        dsf: [2.0, 2.25, 2.5, 2.75, 3.0, 3.5][Math.floor(Math.random() * 6)],
+        webglVendor: vendor,
+        webglRenderer: gpu,
+        isKiwi: true,
+        skipUaFake: true // CỜ KHÓA: Báo cho hệ thống biết không được ghi đè User Agent và Header mạng
+    };
+}
+
 function updateUI(profile) {
     // Đã ẩn tính năng hiển thị thông số thiết bị do không còn cần thiết
 }
@@ -538,9 +580,11 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     if (selected === "random") profile = generateRandomProfile();
     else if (selected === "random_noise") profile = generateStandardChromeProfile();
     else if (selected === "windows_pc") profile = generateWindowsProfile();
+    else if (selected === "random_kiwi") profile = generateKiwiProfile();
     else {
         profile = JSON.parse(JSON.stringify(profiles[selected]));
-        const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
+        const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
+        const chromeMajor = realUaMatch ? realUaMatch[1] : "128";
         const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
         profile.ua = profile.ua.replace(/Chrome\/\d+\.0\.0\.0/, `Chrome/${fullChromeVer}`);
         profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${chromeMajor}`);

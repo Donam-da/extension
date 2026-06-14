@@ -14,54 +14,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const profile = message.profile;
         const ruleId = 1;
 
-        let requestHeaders = [
-            { header: "user-agent", operation: "set", value: profile.ua }
-        ];
+        let requestHeaders = [];
 
-        let fakePlatform = profile.platform.includes("Win") ? "Windows" : profile.platform;
-        if (profile.platform.includes("Linux") && profile.ua.includes("Android")) fakePlatform = "Android";
-        if (profile.platform.includes("Mac")) fakePlatform = "macOS";
+        if (!profile.skipUaFake) {
+            requestHeaders.push({ header: "user-agent", operation: "set", value: profile.ua });
 
-        let fakeModel = "";
-        let fakePlatformVersion = "13.0.0";
-        const modelMatch = profile.ua.match(/\(Linux; Android \d+(?:\.\d+)*; ([^)]+)\)/);
-        if (modelMatch) fakeModel = modelMatch[1];
-        const verMatch = profile.ua.match(/Android (\d+(?:\.\d+)*)/);
-        if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
+            let fakePlatform = profile.platform.includes("Win") ? "Windows" : profile.platform;
+            if (profile.platform.includes("Linux") && profile.ua.includes("Android")) fakePlatform = "Android";
+            if (profile.platform.includes("Mac")) fakePlatform = "macOS";
 
-        let secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Google Chrome";v="${profile.chromeMajor}"`;
-        if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
-            secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Microsoft Edge";v="${profile.chromeMajor}"`;
-        } else if (profile.ua.includes("OPR/")) {
-            secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Opera";v="${profile.chromeMajor}"`;
-        } else if (profile.ua.includes("SamsungBrowser")) {
-            const ssMatch = profile.ua.match(/SamsungBrowser\/(\d+)/);
-            const ssVer = ssMatch ? ssMatch[1] : "20";
-            secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Samsung Internet";v="${ssVer}"`;
+            let fakeModel = "";
+            let fakePlatformVersion = "13.0.0";
+            const modelMatch = profile.ua.match(/\(Linux; Android \d+(?:\.\d+)*; ([^)]+)\)/);
+            if (modelMatch) fakeModel = modelMatch[1];
+            const verMatch = profile.ua.match(/Android (\d+(?:\.\d+)*)/);
+            if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
+
+            let secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Google Chrome";v="${profile.chromeMajor}"`;
+            if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
+                secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Microsoft Edge";v="${profile.chromeMajor}"`;
+            } else if (profile.ua.includes("OPR/")) {
+                secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Opera";v="${profile.chromeMajor}"`;
+            } else if (profile.ua.includes("SamsungBrowser")) {
+                const ssMatch = profile.ua.match(/SamsungBrowser\/(\d+)/);
+                const ssVer = ssMatch ? ssMatch[1] : "20";
+                secChUa = `"Not/A)Brand";v="8", "Chromium";v="${profile.chromeMajor}", "Samsung Internet";v="${ssVer}"`;
+            }
+
+            requestHeaders.push({ header: "sec-ch-ua", operation: "set", value: secChUa });
+            requestHeaders.push({ header: "sec-ch-ua-mobile", operation: "set", value: profile.ua.includes("Mobile") ? "?1" : "?0" });
+            requestHeaders.push({ header: "sec-ch-ua-platform", operation: "set", value: `"${fakePlatform}"` });
+            requestHeaders.push({ header: "sec-ch-ua-model", operation: "set", value: `"${fakeModel}"` });
+            requestHeaders.push({ header: "sec-ch-ua-platform-version", operation: "set", value: `"${fakePlatformVersion}"` });
         }
 
-        requestHeaders.push({ header: "sec-ch-ua", operation: "set", value: secChUa });
-        requestHeaders.push({ header: "sec-ch-ua-mobile", operation: "set", value: profile.ua.includes("Mobile") ? "?1" : "?0" });
-        requestHeaders.push({ header: "sec-ch-ua-platform", operation: "set", value: `"${fakePlatform}"` });
-        requestHeaders.push({ header: "sec-ch-ua-model", operation: "set", value: `"${fakeModel}"` });
-        requestHeaders.push({ header: "sec-ch-ua-platform-version", operation: "set", value: `"${fakePlatformVersion}"` });
-
-        const newRule = {
-            id: ruleId,
-            priority: 1,
-            action: {
-                type: "modifyHeaders",
-                requestHeaders: requestHeaders
-            },
-            condition: {
-                urlFilter: "*",
-                resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "ping", "script", "stylesheet", "image"]
-            }
-        };
-        chrome.declarativeNetRequest.updateDynamicRules({
-            removeRuleIds: [ruleId],
-            addRules: [newRule]
-        });
+        if (requestHeaders.length > 0) {
+            const newRule = {
+                id: ruleId,
+                priority: 1,
+                action: { type: "modifyHeaders", requestHeaders: requestHeaders },
+                condition: { urlFilter: "*", resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "ping", "script", "stylesheet", "image"] }
+            };
+            chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId], addRules: [newRule] });
+        } else {
+            // Nếu được cờ skipUaFake đánh dấu, ta dọn sạch rule cũ để trình duyệt tự gửi header thật
+            chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId] });
+        }
     } else if (message.type === "CLEAR_BROWSING_DATA") {
         // Xóa sạch toàn bộ Cookie, Cache, LocalStorage để web quên danh tính cũ
         chrome.browsingData.remove({
