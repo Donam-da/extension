@@ -97,7 +97,54 @@ function startExpiryTimer(expiryStr) {
     expiryInterval = setInterval(update, 1000);
 }
 
-function initLicensing() {
+async function checkForUpdates() {
+    try {
+        // Tải config chứa thông tin bản cập nhật từ Gist (có thêm timestamp để chống cache)
+        const res = await fetch("https://gist.githubusercontent.com/Donam-da/f7c09d917d09209b818bab60c42f2ca3/raw/ext_config.json?v=" + Date.now());
+        const extConfig = await res.json();
+        const currentVersion = chrome.runtime.getManifest().version;
+
+        if (extConfig.latest_version && isNewerVersion(extConfig.latest_version, currentVersion)) {
+            // Xoá giao diện hiện tại, hiển thị thông báo khóa App
+            document.body.innerHTML = `
+                <div style="padding: 20px; text-align: center; font-family: Consolas, monospace; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; background: #0D1117;">
+                    <h2 style="color: #ff5252; margin-top: 0;">⚠️ YÊU CẦU CẬP NHẬT</h2>
+                    <p style="color: #ffb74d; margin: 5px 0;">Phiên bản hiện tại: v${currentVersion}</p>
+                    <p style="color: #00FF41; margin: 5px 0;">Phiên bản mới nhất: v${extConfig.latest_version}</p>
+                    <div style="margin: 15px 0; padding: 10px; background: #161b22; border: 1px dashed #30363d; border-radius: 5px; color: #c9d1d9; font-size: 13px; text-align: left; white-space: pre-wrap;">${extConfig.update_message || "Đã có bản cập nhật mới. Vui lòng tải về để tiếp tục sử dụng!"}</div>
+                    <button id="btn-do-update" style="background: #00E5FF; color: #000; border: none; padding: 12px 20px; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 10px; text-transform: uppercase;">
+                        Tải Bản Cập Nhật Ngay
+                    </button>
+                </div>
+            `;
+            document.getElementById('btn-do-update').addEventListener('click', () => {
+                window.open(extConfig.update_link, '_blank');
+            });
+            return true;
+        }
+    } catch (e) {
+        console.log("Lỗi kiểm tra cập nhật:", e);
+    }
+    return false;
+}
+
+function isNewerVersion(latest, current) {
+    const v1 = latest.split('.').map(Number);
+    const v2 = current.split('.').map(Number);
+    for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
+        const num1 = v1[i] || 0;
+        const num2 = v2[i] || 0;
+        if (num1 > num2) return true;
+        if (num1 < num2) return false;
+    }
+    return false;
+}
+
+async function initLicensing() {
+    // Kiểm tra bản cập nhật bắt buộc trước
+    const hasUpdate = await checkForUpdates();
+    if (hasUpdate) return; // Nếu có bản cập nhật mới, dừng tại đây để khóa App
+
     chrome.storage.local.get(['machineId', 'licenseKey'], async (data) => {
         // 1. Khởi tạo và lấy Mã Máy (HWID) dựa trên phần cứng (IMEI ảo)
         const hwFingerprint = getDeviceFingerprint();

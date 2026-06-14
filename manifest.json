@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Trùm trường C",
-    "version": "1.0",
+    "version": "1.2",
     "description": "Hãy làm cô ấy theo đuổi bạn vì tiền",
     "permissions": [
         "storage",
