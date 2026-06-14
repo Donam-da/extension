@@ -408,18 +408,9 @@ function generateRandomProfile() {
     // Mở rộng dải Android để tăng số lượng tổ hợp
     const androidVer = Math.floor(Math.random() * 6) + 9; // Phiên bản Android từ 9 đến 14
 
-    // ĐỒNG BỘ ENGINE: Lấy CHÍNH XÁC đến từng con số phiên bản Chrome thật của máy để vượt Cloudflare Turnstile
-    // Không được sinh ngẫu nhiên số đuôi vì Cloudflare biết chính xác phiên bản nào có thực, phiên bản nào là ảo
-    const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
-    let fullChromeVer = "";
-    let chromeMajor = "128";
-    if (realUaMatch) {
-        fullChromeVer = realUaMatch[1];
-        chromeMajor = fullChromeVer.split('.')[0];
-    } else {
-        chromeMajor = (Math.floor(Math.random() * 6) + 125).toString();
-        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
-    }
+    // FAKE PHIÊN BẢN CHROME SIÊU ĐA DẠNG: Từ v70 đến v135, sinh ra hàng chục triệu tổ hợp
+    const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
+    const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
 
     // Giải pháp tối thượng: Giữ nguyên 100% trình duyệt là CHROME để khớp hoàn toàn với lõi Kiwi
     // Chỉ thay đổi thông số phần cứng, CPU, RAM, Tên máy và Phiên bản Android
@@ -473,17 +464,9 @@ function generateStandardChromeProfile() {
 
     const androidVer = Math.floor(Math.random() * 4) + 11; // Rải đều Android từ 11 đến 14
 
-    // ĐỒNG BỘ ENGINE: Dùng CHÍNH XÁC chuỗi phiên bản Chrome thật của trình duyệt hiện tại
-    const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
-    let fullChromeVer = "";
-    let chromeMajor = "128";
-    if (realUaMatch) {
-        fullChromeVer = realUaMatch[1];
-        chromeMajor = fullChromeVer.split('.')[0];
-    } else {
-        chromeMajor = (Math.floor(Math.random() * 6) + 125).toString();
-        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
-    }
+    // FAKE PHIÊN BẢN CHROME SIÊU ĐA DẠNG: Từ v70 đến v135, sinh ra hàng chục triệu tổ hợp
+    const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
+    const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
 
     return {
         name: `Chrome Chuẩn | ${devName} (v${chromeMajor})`,
@@ -500,7 +483,7 @@ function generateStandardChromeProfile() {
 }
 
 function generateWindowsProfile() {
-    // ĐỒNG BỘ ENGINE: Dùng CHÍNH XÁC chuỗi phiên bản Chrome thật của trình duyệt hiện tại
+    // ĐỒNG BỘ ENGINE CHO KỊCH BẢN WINDOWS PC: Dùng CHÍNH XÁC chuỗi phiên bản Chrome thật của trình duyệt hiện tại
     const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
     let fullChromeVer = "";
     let chromeMajor = "128";
@@ -540,10 +523,10 @@ document.getElementById('apply-btn').addEventListener('click', () => {
     else if (selected === "windows_pc") profile = generateWindowsProfile();
     else {
         profile = JSON.parse(JSON.stringify(profiles[selected]));
-        const realUaMatch = navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/);
-        let fullChromeVer = realUaMatch ? realUaMatch[1] : `128.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
+        const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
+        const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
         profile.ua = profile.ua.replace(/Chrome\/\d+\.0\.0\.0/, `Chrome/${fullChromeVer}`);
-        profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${fullChromeVer.split('.')[0]}`);
+        profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${chromeMajor}`);
     }
 
     // Luôn luôn tạo nhiễu ngẫu nhiên để đảm bảo mỗi lần ấn tạo là ra một máy hoàn toàn độc nhất
