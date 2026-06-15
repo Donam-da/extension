@@ -474,85 +474,33 @@ function generateRandomProfile() {
 }
 
 function generateStandardChromeProfile() {
-    // Kịch bản 2: Sinh ngẫu nhiên hàng tỷ cấu hình nhưng 100% là CHROME và MÁY CHUẨN
-    const samsungSeries = ["S928", "S926", "S921", "S918", "S916", "S911", "S908", "S906", "S901", "A556", "A546", "A536", "A346", "A736"];
-    const samsungSuffix = ["B", "U", "U1", "W", "N", "0", "E"];
-    const pixelModels = ["Pixel 6", "Pixel 6 Pro", "Pixel 6a", "Pixel 7", "Pixel 7 Pro", "Pixel 7a", "Pixel 8", "Pixel 8 Pro", "Pixel 8a", "Pixel 9", "Pixel 9 Pro"];
-
-    let devName = "";
-    let vendor = "";
-    let gpu = "";
-
-    // Ghép nối tự động thiết bị phần cứng
-    if (Math.random() > 0.4) {
-        const series = samsungSeries[Math.floor(Math.random() * samsungSeries.length)];
-        const suffix = samsungSuffix[Math.floor(Math.random() * samsungSuffix.length)];
-        devName = `SM-${series}${suffix}`;
-        vendor = "Qualcomm";
-        if (series.includes("S92")) gpu = "Adreno (TM) 750";
-        else if (series.includes("S91")) gpu = "Adreno (TM) 740";
-        else if (series.includes("S90")) gpu = "Adreno (TM) 730";
-        else gpu = "Adreno (TM) " + ["618", "642L", "644"][Math.floor(Math.random() * 3)];
-    } else {
-        devName = pixelModels[Math.floor(Math.random() * pixelModels.length)];
-        vendor = "ARM";
-        if (devName.includes("8") || devName.includes("9")) gpu = "Mali-G715";
-        else if (devName.includes("7")) gpu = "Mali-G710";
-        else gpu = "Mali-G78";
-    }
-
-    const androidVer = Math.floor(Math.random() * 4) + 11; // Rải đều Android từ 11 đến 14
-
-    // ĐỒNG BỘ ENGINE: LinkTot soi Feature Detection rất gắt.
-    // Bắt buộc lấy Phiên bản lõi thật để không mâu thuẫn API, lấy ĐÚNG số Build thật để không bị lộ.
-    const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
-    let fullChromeVer = "";
-    let chromeMajor = "128";
-    if (realUaMatch) {
-        let parts = realUaMatch[1].split('.');
-        if (parts.length === 4) {
-            let patch = parseInt(parts[3]) + Math.floor(Math.random() * 100) - 50;
-            parts[3] = Math.max(0, patch).toString();
-        }
-        fullChromeVer = parts.join('.');
-        chromeMajor = fullChromeVer.split('.')[0];
-    } else {
-        chromeMajor = (Math.floor(Math.random() * 10) + 120).toString();
-        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
-    }
-
-    const buildId = generateAndroidBuildId();
+    // Kịch bản 2 MỚI: CHỈ ĐỔI USER-AGENT BỀ MẶT (Tắt toàn bộ Deep Fake)
+    // Dựa theo yêu cầu "giống các Extension trên Store: Fake ít nhưng qua Cloudflare tốt"
+    const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
+    const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
 
     return {
-        name: `Chrome Chuẩn | ${devName} (Build/${buildId.split('.')[0]})`,
-        ua: `Mozilla/5.0 (Linux; Android ${androidVer}; ${devName} Build/${buildId}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Mobile Safari/537.36`,
-        platform: "Linux aarch64",
-        hardwareConcurrency: [4, 6, 8][Math.floor(Math.random() * 3)],
-        deviceMemory: [4, 6, 8, 12][Math.floor(Math.random() * 4)],
-        screenWidth: [384, 393, 412][Math.floor(Math.random() * 3)],
-        screenHeight: [850, 873, 892, 915][Math.floor(Math.random() * 4)],
-        dsf: [2.0, 2.5, 3.0, 3.5][Math.floor(Math.random() * 4)],
-        webglVendor: vendor,
-        webglRenderer: gpu,
-        fullChromeVer: fullChromeVer
+        name: `Chỉ đổi UA | Chrome v${chromeMajor} (Nhẹ)`,
+        ua: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullChromeVer} Safari/537.36`,
+        platform: navigator.platform || "Win32",
+        hardwareConcurrency: navigator.hardwareConcurrency || 8,
+        deviceMemory: navigator.deviceMemory || 8,
+        fullChromeVer: fullChromeVer,
+        platformVersion: "10.0.0",
+        skipDeepFake: true // Cờ tắt toàn bộ tính năng nhiễu
     };
 }
 
 function generateWindowsProfile() {
-    // ĐỒNG BỘ ENGINE CHO KỊCH BẢN WINDOWS PC: Dùng CHÍNH XÁC chuỗi phiên bản Chrome thật của trình duyệt hiện tại
-    const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
-    let fullChromeVer = "";
-    let chromeMajor = "128";
-    if (realUaMatch) {
-        fullChromeVer = realUaMatch[1];
-        chromeMajor = fullChromeVer.split('.')[0];
-    } else {
-        chromeMajor = (Math.floor(Math.random() * 6) + 125).toString();
-        fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 500) + 6000}.${Math.floor(Math.random() * 100) + 50}`;
-    }
+    // FAKE PHIÊN BẢN CHROME ĐA DẠNG CHO WINDOWS: Từ v70 đến v135
+    const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
+    const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
 
     const w = [1366, 1600, 1920, 2560][Math.floor(Math.random() * 4)];
     const h = w === 1366 ? 768 : w === 1600 ? 900 : w === 1920 ? 1080 : 1440;
+
+    // Ngẫu nhiên phiên bản nhân Hệ điều hành: Windows 10 (10.0.0) hoặc Windows 11 (14.0.0 -> 19.0.0)
+    const winPlatformVersion = Math.random() > 0.5 ? `${Math.floor(Math.random() * 6) + 14}.0.0` : "10.0.0";
 
     return {
         name: `Windows PC | Chrome v${chromeMajor}`,
@@ -564,15 +512,14 @@ function generateWindowsProfile() {
         screenHeight: h,
         dsf: [1.0, 1.25, 1.5][Math.floor(Math.random() * 3)]
         // CHÚ Ý: Cố tình KHÔNG truyền webglVendor và webglRenderer để lấy GPU thật của PC vượt Cloudflare
-        , fullChromeVer: fullChromeVer
+        , fullChromeVer: fullChromeVer, platformVersion: winPlatformVersion
     };
 }
 
 function generateKiwiProfile() {
     const originalUa = navigator.userAgent;
-    const realUaMatch = originalUa.match(/Chrome\/([0-9.]+)/);
-    const chromeMajor = realUaMatch ? realUaMatch[1].split('.')[0] : "128";
-    const fullChromeVer = realUaMatch ? `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}` : "128.0.6000.0";
+    const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
+    const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
 
     const w = [360, 384, 393, 412, 428][Math.floor(Math.random() * 5)];
     const h = [800, 854, 873, 892, 915, 926][Math.floor(Math.random() * 6)];
@@ -631,22 +578,30 @@ document.getElementById('apply-btn').addEventListener('click', () => {
             profile = generateStandardChromeProfile();
         } else {
             profile = JSON.parse(JSON.stringify(profiles[selected]));
-            const realUaMatch = navigator.userAgent.match(/Chrome\/([0-9.]+)/);
-            const chromeMajor = realUaMatch ? realUaMatch[1].split('.')[0] : "128";
+            const chromeMajor = (Math.floor(Math.random() * 66) + 70).toString();
             const fullChromeVer = `${chromeMajor}.0.${Math.floor(Math.random() * 6000) + 2000}.${Math.floor(Math.random() * 300)}`;
-            profile.ua = profile.ua.replace(/Chrome\/\d+\.0\.0\.0/, `Chrome/${fullChromeVer}`);
-            profile.name = profile.name.replace(/Chrome v\d+\.0\.0\.0/, `Chrome v${chromeMajor}`);
+            profile.ua = profile.ua.replace(/Chrome\/[0-9.]+/, `Chrome/${fullChromeVer}`);
+            profile.name = profile.name.replace(/Chrome v[0-9.]+/, `Chrome v${chromeMajor}`);
             profile.fullChromeVer = fullChromeVer;
         }
     }
 
     // Luôn luôn tạo nhiễu ngẫu nhiên để đảm bảo mỗi lần ấn tạo là ra một máy hoàn toàn độc nhất
-    profile.canvasR = Math.floor(Math.random() * 10) - 5;
-    if (profile.canvasR === 0) profile.canvasR = 1;
-    profile.canvasG = Math.floor(Math.random() * 10) - 5;
-    profile.canvasB = Math.floor(Math.random() * 10) - 5;
-    profile.audioNoise = (Math.random() - 0.5) * 0.0001;
-    if (profile.audioNoise === 0) profile.audioNoise = 0.00001;
+    if (!profile.skipDeepFake) {
+        profile.canvasR = Math.floor(Math.random() * 10) - 5;
+        if (profile.canvasR === 0) profile.canvasR = 1;
+        profile.canvasG = Math.floor(Math.random() * 10) - 5;
+        profile.canvasB = Math.floor(Math.random() * 10) - 5;
+        profile.audioNoise = (Math.random() - 0.5) * 0.0001;
+        if (profile.audioNoise === 0) profile.audioNoise = 0.00001;
+
+        const locList = ["vi-VN", "en-US", "en-GB", "fr-FR", "ja-JP", "th-TH", "id-ID", "ko-KR"];
+        profile.fakeLocale = locList[Math.floor(Math.random() * locList.length)];
+
+        profile.audioIn = Math.floor(Math.random() * 3) + 1;
+        profile.audioOut = Math.floor(Math.random() * 3) + 1;
+        profile.videoIn = Math.floor(Math.random() * 2) + 1;
+    }
 
     profile.colorDepth = 24;
     const match = profile.ua.match(/(?:Chrome|CriOS)\/(\d+)/);
@@ -676,7 +631,7 @@ document.getElementById('apply-btn').addEventListener('click', () => {
                 }, 1000);
 
                 chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-                    if (tabs[0]) chrome.tabs.reload(tabs[0].id);
+                    if (tabs[0]) chrome.tabs.reload(tabs[0].id, { bypassCache: true });
                 });
             });
         });

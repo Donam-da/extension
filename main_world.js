@@ -12,35 +12,19 @@ const maskFunction = (fakeFn, originalFn) => {
     return fakeFn;
 };
 
-// Đè toString ngay lập tức để Turnstile không thể quét mã nguồn hàm
-if (Function.prototype.toString) {
-    const origToString = Function.prototype.toString;
-    const fakeToString = function toString() {
-        if (globalFnMap.has(this)) {
-            const target = globalFnMap.get(this);
-            if (typeof target === 'string') return target;
-            return origToString.call(target);
-        }
-        if (this === fakeToString) return origToString.call(origToString);
-        return origToString.call(this);
-    };
-    Function.prototype.toString = fakeToString;
-    globalFnMap.set(fakeToString, origToString);
-    globalFnMap.set(origToString, origToString);
-}
-
 // =====================================================================
-// LỚP PHÒNG NGỰ ĐỒNG BỘ (SYNCHRONOUS DEFENSE) - CHẠY NGAY LẬP TỨC
-// Ngăn chặn các trang web dùng inline script để bắt bài trước khi
-// Extension kịp nhận được Profile từ background.
+// LỚP DỌN DẸP DẤU VẾT EXTENSION (CHỈ CHẠY KHI ĐÃ CÓ PROFILE)
 // =====================================================================
-(function syncPreSpoof() {
+function executePreSpoof(profile) {
     try {
         const sanitizeWindow = (win) => {
             try {
                 // 1. Tiêu diệt tức thời các dấu vết của trình duyệt Extension
                 const badVars = ['lemur', 'LemurApp', 'KiwiExtension', 'browser'];
                 for (let v of badVars) { try { delete win[v]; } catch (e) { } }
+
+                // Không xóa window.chrome nếu là chế độ nhẹ (Tránh bị CreepJS báo Headless)
+                if (profile && profile.skipDeepFake) return;
 
                 // 2. Dọn sạch window.chrome bằng DELETE sâu (TUYỆT ĐỐI KHÔNG DÙNG PROXY VÌ TURNSTILE SẼ PHÁT HIỆN)
                 if (win.chrome) {
@@ -80,28 +64,8 @@ if (Function.prototype.toString) {
             }
         }
 
-        // 5. Cầm chân Cloudflare/Turnstile: Bắt Promise của nó phải chờ cho đến khi Profile tải xong!
-        if (navigator.userAgentData) {
-            const origGetHighEntropyValues = navigator.userAgentData.getHighEntropyValues;
-            window._isProfileReady = false;
-
-            const fakeGetHighEntropyValues = function getHighEntropyValues(hints) {
-                if (!window._isProfileReady) {
-                    return new Promise((resolve) => {
-                        const waitInterval = setInterval(() => {
-                            if (window._isProfileReady) {
-                                clearInterval(waitInterval);
-                                resolve(navigator.userAgentData.getHighEntropyValues(hints));
-                            }
-                        }, 5);
-                    });
-                }
-                return origGetHighEntropyValues.call(this, hints);
-            };
-            navigator.userAgentData.getHighEntropyValues = maskFunction(fakeGetHighEntropyValues, origGetHighEntropyValues);
-        }
     } catch (e) { }
-})();
+}
 // =====================================================================
 
 window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
@@ -111,6 +75,29 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
     }
     if (!profile) return;
     window._spoofedProfile = profile; // Lưu trữ Profile để các Proxy đồng bộ có thể sử dụng
+
+    // --- KÍCH HOẠT BẢO VỆ TOSTRING() VÀ DỌN DẸP EXTENSION ---
+    // Đưa vào đây để đảm bảo Extension KHÔNG can thiệp vào web khi chưa đăng nhập Key
+    if (Function.prototype.toString && !globalFnMap.has(Function.prototype.toString)) {
+        const origToString = Function.prototype.toString;
+        const wrapper = {
+            toString() {
+                if (globalFnMap.has(this)) {
+                    const target = globalFnMap.get(this);
+                    if (typeof target === 'string') return target;
+                    return origToString.call(target);
+                }
+                if (this === wrapper.toString) return origToString.call(origToString);
+                return origToString.call(this);
+            }
+        };
+        const fakeToString = wrapper.toString;
+        Object.defineProperty(fakeToString, 'name', { value: 'toString', configurable: true });
+        Function.prototype.toString = fakeToString;
+        globalFnMap.set(fakeToString, origToString);
+        globalFnMap.set(origToString, origToString);
+    }
+    executePreSpoof(profile);
 
     // --- HỆ THỐNG RADAR BẮT LỖI CLOUDFLARE TRỰC TIẾP TRÊN MÀN HÌNH ---
     function showDebugError(msg, source, lineno, colno, error) {
@@ -151,15 +138,15 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
         if (e.reason) showDebugError(e.reason.message || "Promise Rejection", e.reason.stack || "", 0, 0, e.reason);
     }, true);
 
-    const defineMaskedGetter = (obj, prop, value, expectedClassName) => {
+    const defineMaskedGetter = (obj, prop, value) => {
         try {
             const originalDesc = Object.getOwnPropertyDescriptor(obj, prop);
 
             // SỬ DỤNG ES6 METHOD SHORTHAND: Tạo hàm KHÔNG CÓ thuộc tính prototype (Giống hệt hàm Native C++)
             const wrapper = {
                 getter() {
-                    if (expectedClassName) {
-                        if (Object.prototype.toString.call(this) !== `[object ${expectedClassName}]`) throw new TypeError("Illegal invocation");
+                    if (originalDesc && originalDesc.get) {
+                        originalDesc.get.call(this); // Trình duyệt thật tự động kiểm tra 'this', nếu sai sẽ ném Illegal invocation
                     }
                     return value;
                 }
@@ -185,6 +172,50 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
             if (spoofedWindows.has(targetWin)) return;
             spoofedWindows.add(targetWin);
+
+            // 0.1 DEEP FAKE WEB WORKER (BỊT LỖ HỔNG LỘ HỆ ĐIỀU HÀNH THẬT KHI CHẠY LUỒNG NGẦM)
+            if (targetWin.Worker) {
+                const OrigWorker = targetWin.Worker;
+                targetWin.Worker = maskFunction(function (scriptURL, options) {
+                    try {
+                        const absUrl = new URL(scriptURL, targetWin.document.baseURI).href;
+                        const fakeNav = `try { Object.defineProperty(WorkerNavigator.prototype, 'userAgent', {get: () => '${profile.ua}'}); Object.defineProperty(WorkerNavigator.prototype, 'platform', {get: () => '${profile.platform}'}); Object.defineProperty(WorkerNavigator.prototype, 'hardwareConcurrency', {get: () => ${profile.hardwareConcurrency}}); Object.defineProperty(WorkerNavigator.prototype, 'deviceMemory', {get: () => ${profile.deviceMemory}}); } catch(e){}`;
+                        const blob = new Blob([fakeNav + `\nimportScripts('${absUrl}');`], { type: 'application/javascript' });
+                        const blobUrl = URL.createObjectURL(blob);
+                        return new OrigWorker(blobUrl, options);
+                    } catch (e) {
+                        // Nếu Web chặn Blob CSP, lùi về dùng Worker gốc
+                        return new OrigWorker(scriptURL, options);
+                    }
+                }, OrigWorker);
+            }
+
+            // 0.2 DEEP FAKE SHARED WORKER
+            if (targetWin.SharedWorker) {
+                const OrigSharedWorker = targetWin.SharedWorker;
+                targetWin.SharedWorker = maskFunction(function (scriptURL, options) {
+                    try {
+                        const absUrl = new URL(scriptURL, targetWin.document.baseURI).href;
+                        const fakeNav = `try { Object.defineProperty(WorkerNavigator.prototype, 'userAgent', {get: () => '${profile.ua}'}); Object.defineProperty(WorkerNavigator.prototype, 'platform', {get: () => '${profile.platform}'}); Object.defineProperty(WorkerNavigator.prototype, 'hardwareConcurrency', {get: () => ${profile.hardwareConcurrency}}); Object.defineProperty(WorkerNavigator.prototype, 'deviceMemory', {get: () => ${profile.deviceMemory}}); } catch(e){}`;
+                        const blob = new Blob([fakeNav + `\nimportScripts('${absUrl}');`], { type: 'application/javascript' });
+                        const blobUrl = URL.createObjectURL(blob);
+                        return new OrigSharedWorker(blobUrl, options);
+                    } catch (e) {
+                        return new OrigSharedWorker(scriptURL, options);
+                    }
+                }, OrigSharedWorker);
+            }
+
+            // --- HỆ THỐNG NATIVE BRAND CHECKING ---
+            // Buộc mọi hàm bị Fake phải ném lỗi "Illegal invocation" nếu CreepJS cố tình gọi sai
+            const createBrandChecker = (proto, prop) => {
+                try { const getter = Object.getOwnPropertyDescriptor(proto, prop).get; return (obj) => { try { getter.call(obj); return true; } catch (e) { return false; } }; } catch (e) { return () => true; }
+            };
+            const isCanvas = targetWin.HTMLCanvasElement ? createBrandChecker(targetWin.HTMLCanvasElement.prototype, 'width') : () => true;
+            const isCtx2D = targetWin.CanvasRenderingContext2D ? createBrandChecker(targetWin.CanvasRenderingContext2D.prototype, 'canvas') : () => true;
+            const isCtxWebGL = targetWin.WebGLRenderingContext ? createBrandChecker(targetWin.WebGLRenderingContext.prototype, 'canvas') : () => true;
+            const isCtxWebGL2 = targetWin.WebGL2RenderingContext ? createBrandChecker(targetWin.WebGL2RenderingContext.prototype, 'canvas') : () => true;
+            const isMediaDevices = targetWin.MediaDevices ? createBrandChecker(targetWin.MediaDevices.prototype, 'ondevicechange') : () => true;
 
             // 0. BẢO VỆ HÀM TOSTRING() CHO CÁC IFRAME CON MỚI TẠO
             if (targetWin.Function && targetWin.Function.prototype && targetWin.Function.prototype.toString) {
@@ -240,18 +271,18 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
             // 1. Fake Navigator
             if (!profile.skipUaFake) {
-                defineMaskedGetter(targetWin.Navigator.prototype, 'userAgent', profile.ua, "Navigator");
-                defineMaskedGetter(targetWin.Navigator.prototype, 'platform', profile.platform, "Navigator");
-                defineMaskedGetter(targetWin.Navigator.prototype, 'appVersion', profile.ua.replace(/^Mozilla\//, ''), "Navigator");
+                defineMaskedGetter(targetWin.Navigator.prototype, 'userAgent', profile.ua);
+                defineMaskedGetter(targetWin.Navigator.prototype, 'platform', profile.platform);
+                defineMaskedGetter(targetWin.Navigator.prototype, 'appVersion', profile.ua.replace(/^Mozilla\//, ''));
             }
-            defineMaskedGetter(targetWin.Navigator.prototype, 'hardwareConcurrency', profile.hardwareConcurrency, "Navigator");
-            defineMaskedGetter(targetWin.Navigator.prototype, 'deviceMemory', profile.deviceMemory, "Navigator");
-            defineMaskedGetter(targetWin.Navigator.prototype, 'vendor', profile.navigatorVendor || "Google Inc.", "Navigator");
-            defineMaskedGetter(targetWin.Navigator.prototype, 'webdriver', false, "Navigator");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'hardwareConcurrency', profile.hardwareConcurrency);
+            defineMaskedGetter(targetWin.Navigator.prototype, 'deviceMemory', profile.deviceMemory);
+            defineMaskedGetter(targetWin.Navigator.prototype, 'vendor', profile.navigatorVendor || "Google Inc.");
+            defineMaskedGetter(targetWin.Navigator.prototype, 'webdriver', false);
 
             // 1.5. Fake Touch Support
             if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
-                defineMaskedGetter(targetWin.Navigator.prototype, 'maxTouchPoints', 5, "Navigator");
+                defineMaskedGetter(targetWin.Navigator.prototype, 'maxTouchPoints', 5);
                 if (!('ontouchstart' in targetWin)) {
                     targetWin.ontouchstart = null;
                     try { Object.defineProperty(targetWin, 'ontouchstart', { value: null, writable: true, configurable: true, enumerable: true }); } catch (e) { }
@@ -260,14 +291,49 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
             // 2. Fake Screen
             if (profile.screenWidth && profile.screenHeight && targetWin.Screen) {
-                defineMaskedGetter(targetWin.Screen.prototype, 'width', profile.screenWidth, "Screen");
-                defineMaskedGetter(targetWin.Screen.prototype, 'height', profile.screenHeight, "Screen");
-                defineMaskedGetter(targetWin.Screen.prototype, 'availWidth', profile.screenWidth, "Screen");
-                defineMaskedGetter(targetWin.Screen.prototype, 'availHeight', profile.screenHeight, "Screen");
+                defineMaskedGetter(targetWin.Screen.prototype, 'width', profile.screenWidth);
+                defineMaskedGetter(targetWin.Screen.prototype, 'height', profile.screenHeight);
+                defineMaskedGetter(targetWin.Screen.prototype, 'availWidth', profile.screenWidth);
+                defineMaskedGetter(targetWin.Screen.prototype, 'availHeight', profile.screenHeight);
                 if (profile.colorDepth) {
-                    defineMaskedGetter(targetWin.Screen.prototype, 'colorDepth', profile.colorDepth, "Screen");
-                    defineMaskedGetter(targetWin.Screen.prototype, 'pixelDepth', profile.colorDepth, "Screen");
+                    defineMaskedGetter(targetWin.Screen.prototype, 'colorDepth', profile.colorDepth);
+                    defineMaskedGetter(targetWin.Screen.prototype, 'pixelDepth', profile.colorDepth);
                 }
+
+                // Đồng bộ kích thước cửa sổ Browser (Chống rò rỉ qua CSS Media Queries)
+                if (targetWin.Window && targetWin.Window.prototype) {
+                    defineMaskedGetter(targetWin.Window.prototype, 'innerWidth', profile.screenWidth);
+                    defineMaskedGetter(targetWin.Window.prototype, 'innerHeight', profile.screenHeight);
+                    defineMaskedGetter(targetWin.Window.prototype, 'outerWidth', profile.screenWidth);
+                    defineMaskedGetter(targetWin.Window.prototype, 'outerHeight', profile.screenHeight);
+                }
+
+                if (targetWin.matchMedia) {
+                    const origMatchMedia = targetWin.matchMedia;
+                    targetWin.matchMedia = maskFunction(function (query) {
+                        let matches = null;
+                        if (query.includes('max-width')) {
+                            const m = query.match(/max-width:\s*(\d+)px/);
+                            if (m && profile.screenWidth) matches = profile.screenWidth <= parseInt(m[1]);
+                        } else if (query.includes('min-width')) {
+                            const m = query.match(/min-width:\s*(\d+)px/);
+                            if (m && profile.screenWidth) matches = profile.screenWidth >= parseInt(m[1]);
+                        }
+                        if (matches !== null && targetWin.MediaQueryList) {
+                            const res = Object.create(targetWin.MediaQueryList.prototype);
+                            Object.defineProperty(res, 'matches', { get: () => matches });
+                            Object.defineProperty(res, 'media', { get: () => query });
+                            res.addListener = function () { }; res.removeListener = function () { };
+                            return res;
+                        }
+                        return origMatchMedia.apply(this, arguments);
+                    }, origMatchMedia);
+                }
+            }
+
+            // 2.5. Fake Device Pixel Ratio (DSF)
+            if (profile.dsf && targetWin.Window && targetWin.Window.prototype) {
+                defineMaskedGetter(targetWin.Window.prototype, 'devicePixelRatio', profile.dsf);
             }
 
             // 3. Deep Fake WebGL
@@ -275,9 +341,13 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 const originalGetParameter = targetWin.WebGLRenderingContext.prototype.getParameter;
                 const wrapper = {
                     getParameter(param) {
-                        if (param === 37445) return profile.webglVendor;
-                        if (param === 37446) return profile.webglRenderer;
-                        return originalGetParameter.call(this, param);
+                        if (!isCtxWebGL(this)) return originalGetParameter.apply(this, arguments);
+                        if (param === 37445) return profile.webglVendor; // UNMASKED_VENDOR
+                        if (param === 37446) return profile.webglRenderer; // UNMASKED_RENDERER
+                        if (param === 7936) return "WebKit"; // VENDOR
+                        if (param === 7937) return "WebKit WebGL"; // RENDERER
+                        if (param === 7938) return `WebGL 1.0 (OpenGL ES 2.0 Chromium ${profile.chromeMajor}.0)`; // VERSION
+                        return originalGetParameter.apply(this, arguments);
                     }
                 };
                 targetWin.WebGLRenderingContext.prototype.getParameter = maskFunction(wrapper.getParameter, originalGetParameter);
@@ -286,81 +356,16 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                 const originalGetParameter2 = targetWin.WebGL2RenderingContext.prototype.getParameter;
                 const wrapper2 = {
                     getParameter(param) {
+                        if (!isCtxWebGL2(this)) return originalGetParameter2.apply(this, arguments);
                         if (param === 37445) return profile.webglVendor;
                         if (param === 37446) return profile.webglRenderer;
-                        return originalGetParameter2.call(this, param);
+                        if (param === 7936) return "WebKit";
+                        if (param === 7937) return "WebKit WebGL";
+                        if (param === 7938) return `WebGL 2.0 (OpenGL ES 3.0 Chromium ${profile.chromeMajor}.0)`;
+                        return originalGetParameter2.apply(this, arguments);
                     }
                 };
                 targetWin.WebGL2RenderingContext.prototype.getParameter = maskFunction(wrapper2.getParameter, originalGetParameter2);
-            }
-
-            // 4. Deep Fake Canvas (Nhiễu vân tay đồ họa)
-            if (profile.canvasR && targetWin.HTMLCanvasElement) {
-                // Bơm thuộc tính willReadFrequently để tắt cảnh báo Performance của Chrome
-                const origGetContext = targetWin.HTMLCanvasElement.prototype.getContext;
-                const wrapperGetContext = {
-                    getContext(contextId, options) {
-                        if (contextId === '2d') {
-                            options = options || {};
-                            options.willReadFrequently = true;
-                        }
-                        return origGetContext.call(this, contextId, options);
-                    }
-                };
-                targetWin.HTMLCanvasElement.prototype.getContext = maskFunction(wrapperGetContext.getContext, origGetContext);
-
-                const origGetImageData = targetWin.CanvasRenderingContext2D.prototype.getImageData;
-                const wrapperCanvas = {
-                    getImageData(x, y, w, h) {
-                        const imageData = origGetImageData.call(this, x, y, w, h);
-                        if (imageData && imageData.data) {
-                            for (let i = 0; i < imageData.data.length; i += 4) {
-                                imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + profile.canvasR));
-                                imageData.data[i + 1] = Math.min(255, Math.max(0, imageData.data[i + 1] + profile.canvasG));
-                                imageData.data[i + 2] = Math.min(255, Math.max(0, imageData.data[i + 2] + profile.canvasB));
-                            }
-                        }
-                        return imageData;
-                    }
-                };
-                targetWin.CanvasRenderingContext2D.prototype.getImageData = maskFunction(wrapperCanvas.getImageData, origGetImageData);
-
-                const origToDataURL = targetWin.HTMLCanvasElement.prototype.toDataURL;
-                const wrapperDataURL = {
-                    toDataURL(type, encoderOptions) {
-                        const context = this.getContext('2d');
-                        if (context && profile.canvasR) {
-                            try {
-                                const imageData = origGetImageData.call(context, 0, 0, this.width, this.height);
-                                if (imageData && imageData.data) {
-                                    for (let i = 0; i < imageData.data.length; i += 4) {
-                                        imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + profile.canvasR));
-                                        imageData.data[i + 1] = Math.min(255, Math.max(0, imageData.data[i + 1] + profile.canvasG));
-                                        imageData.data[i + 2] = Math.min(255, Math.max(0, imageData.data[i + 2] + profile.canvasB));
-                                    }
-                                    context.putImageData(imageData, 0, 0);
-                                }
-                            } catch (e) { }
-                        }
-                        return origToDataURL.call(this, type, encoderOptions);
-                    }
-                };
-                targetWin.HTMLCanvasElement.prototype.toDataURL = maskFunction(wrapperDataURL.toDataURL, origToDataURL);
-            }
-
-            // 5. Deep Fake Audio (Nhiễu vân tay âm thanh)
-            if (profile.audioNoise && targetWin.AudioBuffer) {
-                const origGetChannelData = targetWin.AudioBuffer.prototype.getChannelData;
-                const wrapperAudio = {
-                    getChannelData(channel) {
-                        const data = origGetChannelData.call(this, channel);
-                        for (let i = 0; i < data.length; i += 100) {
-                            data[i] += profile.audioNoise;
-                        }
-                        return data;
-                    }
-                };
-                targetWin.AudioBuffer.prototype.getChannelData = maskFunction(wrapperAudio.getChannelData, origGetChannelData);
             }
 
             // 6. Fake window.chrome
@@ -385,66 +390,148 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
 
             // 7. Client Hints (userAgentData)
             if (targetWin.navigator && targetWin.navigator.userAgentData && !profile.skipUaFake) {
-                let brandName = "Google Chrome";
-                let brandVer = profile.chromeMajor;
-                let fullBrandVer = profile.fullChromeVer || `${profile.chromeMajor}.0.0.0`;
+                if (parseInt(profile.chromeMajor) < 89) {
+                    // Trình duyệt cũ (Dưới Chrome 89) không có Client Hints. Phải xoá đi để Turnstile không bắt bài.
+                    defineMaskedGetter(targetWin.Navigator.prototype, 'userAgentData', undefined);
+                } else {
+                    let brandName = "Google Chrome";
+                    let brandVer = profile.chromeMajor;
+                    let fullBrandVer = profile.fullChromeVer || `${profile.chromeMajor}.0.0.0`;
 
-                if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
-                    brandName = "Microsoft Edge";
-                } else if (profile.ua.includes("OPR/")) {
-                    brandName = "Opera";
-                } else if (profile.ua.includes("SamsungBrowser")) {
-                    brandName = "Samsung Internet";
-                    const ssMatch = profile.ua.match(/SamsungBrowser\/(\d+)/);
-                    if (ssMatch) brandVer = ssMatch[1];
-                }
-
-                let fakeBrands = [
-                    { brand: "Not/A)Brand", version: "8" },
-                    { brand: "Chromium", version: profile.chromeMajor }
-                ];
-                let fakeFullBrands = [
-                    { brand: "Not/A)Brand", version: "8.0.0.0" },
-                    { brand: "Chromium", version: fullBrandVer }
-                ];
-                if (!profile.isKiwi) {
-                    fakeBrands.push({ brand: brandName, version: brandVer });
-                    fakeFullBrands.push({ brand: brandName, version: fullBrandVer });
-                }
-                let fakePlatform = profile.platform.includes("Win") ? "Windows" : profile.platform;
-                if (profile.platform.includes("Linux") && profile.ua.includes("Android")) fakePlatform = "Android";
-                if (profile.platform.includes("Mac")) fakePlatform = "macOS";
-
-                let fakeModel = "";
-                let fakePlatformVersion = "13.0.0";
-                const modelMatch = profile.ua.match(/\(Linux; Android \d+(?:\.\d+)*; ([^)]+)\)/);
-                if (modelMatch) fakeModel = modelMatch[1].split(' Build/')[0];
-                const verMatch = profile.ua.match(/Android (\d+(?:\.\d+)*)/);
-                if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
-
-                const uaDataProto = Object.getPrototypeOf(targetWin.navigator.userAgentData);
-                defineMaskedGetter(uaDataProto, 'brands', fakeBrands, "NavigatorUAData");
-                defineMaskedGetter(uaDataProto, 'mobile', profile.ua.includes("Mobile"), "NavigatorUAData");
-                defineMaskedGetter(uaDataProto, 'platform', fakePlatform, "NavigatorUAData");
-
-                const originalGetHighEntropyValues = uaDataProto.getHighEntropyValues;
-                const wrapperUA = {
-                    getHighEntropyValues(hints) {
-                        return originalGetHighEntropyValues.call(this, hints).then(values => {
-                            let fakeValues = { ...values };
-                            if (hints.includes("brands")) fakeValues.brands = fakeBrands;
-                            if (hints.includes("fullVersionList")) fakeValues.fullVersionList = fakeFullBrands;
-                            if (hints.includes("platform")) fakeValues.platform = fakePlatform;
-                            if (hints.includes("mobile")) fakeValues.mobile = profile.ua.includes("Mobile");
-                            if (hints.includes("model")) fakeValues.model = fakeModel;
-                            if (hints.includes("platformVersion")) fakeValues.platformVersion = fakePlatformVersion;
-                            if (hints.includes("architecture")) fakeValues.architecture = profile.platform.includes("Win") ? "x86" : "arm";
-                            if (hints.includes("bitness")) fakeValues.bitness = profile.platform.includes("Win") ? "64" : "";
-                            return fakeValues;
-                        });
+                    if (profile.ua.includes("EdgA") || profile.ua.includes("Edg/")) {
+                        brandName = "Microsoft Edge";
+                    } else if (profile.ua.includes("OPR/")) {
+                        brandName = "Opera";
+                    } else if (profile.ua.includes("SamsungBrowser")) {
+                        brandName = "Samsung Internet";
+                        const ssMatch = profile.ua.match(/SamsungBrowser\/(\d+)/);
+                        if (ssMatch) brandVer = ssMatch[1];
                     }
+
+                    let fakeBrands = [
+                        { brand: "Not/A)Brand", version: "8" },
+                        { brand: "Chromium", version: profile.chromeMajor }
+                    ];
+                    let fakeFullBrands = [
+                        { brand: "Not/A)Brand", version: "8.0.0.0" },
+                        { brand: "Chromium", version: fullBrandVer }
+                    ];
+                    if (!profile.isKiwi) {
+                        fakeBrands.push({ brand: brandName, version: brandVer });
+                        fakeFullBrands.push({ brand: brandName, version: fullBrandVer });
+                    }
+                    let fakePlatform = profile.platform.includes("Win") ? "Windows" : profile.platform;
+                    if (profile.platform.includes("Linux") && profile.ua.includes("Android")) fakePlatform = "Android";
+                    if (profile.platform.includes("Mac")) fakePlatform = "macOS";
+
+                    let fakeModel = "";
+                    let fakePlatformVersion = "13.0.0";
+                    const modelMatch = profile.ua.match(/\(Linux; Android \d+(?:\.\d+)*; ([^)]+)\)/);
+                    if (modelMatch) fakeModel = modelMatch[1].split(' Build/')[0];
+                    const verMatch = profile.ua.match(/Android (\d+(?:\.\d+)*)/);
+                    if (verMatch) fakePlatformVersion = verMatch[1] + ".0.0";
+                    if (profile.platformVersion) fakePlatformVersion = profile.platformVersion;
+
+                    const uaDataProto = Object.getPrototypeOf(targetWin.navigator.userAgentData);
+                    defineMaskedGetter(uaDataProto, 'brands', fakeBrands);
+                    defineMaskedGetter(uaDataProto, 'mobile', profile.ua.includes("Mobile"));
+                    defineMaskedGetter(uaDataProto, 'platform', fakePlatform);
+
+                    const originalGetHighEntropyValues = window._origGetHEV || uaDataProto.getHighEntropyValues;
+                    const uaDataBrandsGetter = Object.getOwnPropertyDescriptor(targetWin.NavigatorUAData.prototype, 'brands').get;
+                    const wrapperUA = {
+                        getHighEntropyValues() {
+                            try { uaDataBrandsGetter.call(this); } catch (e) { return originalGetHighEntropyValues.apply(this, arguments); }
+                            return originalGetHighEntropyValues.apply(this, arguments).then(values => {
+                                const hints = arguments[0] || [];
+                                let fakeValues = { ...values };
+                                if (hints.includes("brands")) fakeValues.brands = fakeBrands;
+                                if (hints.includes("fullVersionList")) fakeValues.fullVersionList = fakeFullBrands;
+                                if (hints.includes("platform")) fakeValues.platform = fakePlatform;
+                                if (hints.includes("mobile")) fakeValues.mobile = profile.ua.includes("Mobile");
+                                if (hints.includes("model")) fakeValues.model = fakeModel;
+                                if (hints.includes("platformVersion")) fakeValues.platformVersion = fakePlatformVersion;
+                                if (hints.includes("architecture")) fakeValues.architecture = profile.platform.includes("Win") ? "x86" : "arm";
+                                if (hints.includes("bitness")) fakeValues.bitness = profile.platform.includes("Win") ? "64" : "";
+                                return fakeValues;
+                            });
+                        }
+                    };
+                    uaDataProto.getHighEntropyValues = maskFunction(wrapperUA.getHighEntropyValues, originalGetHighEntropyValues);
+                }
+            }
+
+            // 8. Fake Plugins (Tránh lộ PC Plugins khi Fake Mobile)
+            if (profile.ua.includes("Mobile") || profile.ua.includes("Android")) {
+                if (targetWin.navigator.plugins && targetWin.navigator.plugins.length > 0) {
+                    // Sử dụng Object.freeze để giống hệt mảng rỗng bản Native, không bị lộ do Object.create
+                    const createEmptyPluginArray = (proto) => Object.freeze(Object.assign(Object.create(proto.prototype), { length: 0 }));
+
+                    if (targetWin.PluginArray) defineMaskedGetter(targetWin.Navigator.prototype, 'plugins', createEmptyPluginArray(targetWin.PluginArray));
+                    if (targetWin.MimeTypeArray) defineMaskedGetter(targetWin.Navigator.prototype, 'mimeTypes', createEmptyPluginArray(targetWin.MimeTypeArray));
+                    defineMaskedGetter(targetWin.Navigator.prototype, 'pdfViewerEnabled', false);
+                }
+            }
+
+            // 11. Deep Fake Timezone & Locale (Nhiễu Múi giờ và Ngôn ngữ)
+            if (!profile.skipDeepFake && targetWin.Intl && targetWin.Intl.DateTimeFormat) {
+                const tzMap = {
+                    '-420': ['Asia/Ho_Chi_Minh', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Phnom_Penh', 'Asia/Vientiane'],
+                    '-480': ['Asia/Singapore', 'Asia/Kuala_Lumpur', 'Asia/Shanghai', 'Asia/Taipei', 'Asia/Manila', 'Asia/Hong_Kong'],
+                    '-540': ['Asia/Tokyo', 'Asia/Seoul'],
+                    '0': ['Europe/London', 'Europe/Dublin'],
+                    '-60': ['Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Europe/Madrid'],
+                    '240': ['America/New_York', 'America/Detroit', 'America/Havana'],
+                    '300': ['America/Chicago', 'America/Mexico_City'],
+                    '480': ['America/Los_Angeles', 'America/Tijuana']
                 };
-                uaDataProto.getHighEntropyValues = maskFunction(wrapperUA.getHighEntropyValues, originalGetHighEntropyValues);
+                const isIntlDTF = targetWin.Intl && targetWin.Intl.DateTimeFormat ? createBrandChecker(targetWin.Intl.DateTimeFormat.prototype, 'format') : () => true;
+                const origResolvedOptions = targetWin.Intl.DateTimeFormat.prototype.resolvedOptions;
+                targetWin.Intl.DateTimeFormat.prototype.resolvedOptions = maskFunction(function () {
+                    if (!isIntlDTF(this)) return origResolvedOptions.apply(this, arguments);
+                    const opts = origResolvedOptions.apply(this, arguments);
+                    if (opts) {
+                        const realOffset = new targetWin.Date().getTimezoneOffset().toString();
+                        if (tzMap[realOffset]) {
+                            // Bốc ngẫu nhiên một Múi giờ tương đương cùng Offset để không bị mâu thuẫn DST
+                            const idx = Math.abs(profile.canvasR || 0) % tzMap[realOffset].length;
+                            opts.timeZone = tzMap[realOffset][idx];
+                        }
+                        if (profile.fakeLocale) opts.locale = profile.fakeLocale;
+                    }
+                    return opts;
+                }, origResolvedOptions);
+            }
+            if (profile.fakeLocale && !profile.skipUaFake) {
+                defineMaskedGetter(targetWin.Navigator.prototype, 'language', profile.fakeLocale);
+                defineMaskedGetter(targetWin.Navigator.prototype, 'languages', [profile.fakeLocale, 'en-US', 'en']);
+            }
+
+            // 12. Deep Fake Media Devices (Nhiễu số lượng Loa, Mic, Camera)
+            if (!profile.skipDeepFake && targetWin.navigator && targetWin.navigator.mediaDevices && targetWin.navigator.mediaDevices.enumerateDevices) {
+                const origEnumerate = targetWin.navigator.mediaDevices.enumerateDevices;
+                targetWin.navigator.mediaDevices.enumerateDevices = maskFunction(function () {
+                    if (!isMediaDevices(this)) return origEnumerate.apply(this, arguments);
+                    return origEnumerate.apply(this, arguments).then(devices => {
+                        let fakeDevices = [];
+                        const makeDevice = (kind, label, idx) => {
+                            const dId = "dev_" + kind + "_" + idx + "_" + Math.abs(profile.canvasR);
+                            const gId = "grp_" + kind + "_" + Math.abs(profile.canvasG);
+                            let obj = {};
+                            if (targetWin.MediaDeviceInfo && targetWin.MediaDeviceInfo.prototype) obj = Object.create(targetWin.MediaDeviceInfo.prototype);
+                            Object.defineProperty(obj, 'deviceId', { value: dId, enumerable: true });
+                            Object.defineProperty(obj, 'kind', { value: kind, enumerable: true });
+                            Object.defineProperty(obj, 'label', { value: label, enumerable: true });
+                            Object.defineProperty(obj, 'groupId', { value: gId, enumerable: true });
+                            obj.toJSON = function () { return { deviceId: this.deviceId, kind: this.kind, label: this.label, groupId: this.groupId }; };
+                            return obj;
+                        };
+                        for (let i = 0; i < (profile.audioIn || 1); i++) fakeDevices.push(makeDevice('audioinput', '', i));
+                        for (let i = 0; i < (profile.audioOut || 1); i++) fakeDevices.push(makeDevice('audiooutput', '', i));
+                        for (let i = 0; i < (profile.videoIn || 1); i++) fakeDevices.push(makeDevice('videoinput', '', i));
+                        return fakeDevices;
+                    });
+                }, origEnumerate);
             }
 
             // 9.5. Chặn rò rỉ IP qua WebRTC (Xóa STUN/TURN Servers)
@@ -479,14 +566,6 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
             if (targetWin.RTCPeerConnection) targetWin.RTCPeerConnection = spoofRTC(targetWin.RTCPeerConnection);
             if (targetWin.webkitRTCPeerConnection) targetWin.webkitRTCPeerConnection = spoofRTC(targetWin.webkitRTCPeerConnection);
 
-            // 9.6. Chặn Service Worker (Tránh bị soi cấu hình ngầm)
-            if (targetWin.navigator && targetWin.navigator.serviceWorker) {
-                const origRegister = targetWin.navigator.serviceWorker.register;
-                targetWin.navigator.serviceWorker.register = maskFunction(function () {
-                    return Promise.reject(new Error("Service Worker is disabled for privacy"));
-                }, origRegister);
-            }
-
             // 10. Smart Back (Tuyệt chiêu chống giam lỏng)
             try {
                 const hostname = targetWin.location.hostname;
@@ -499,7 +578,8 @@ window.addEventListener("Bypass_SpoofProfile_Init", function (e) {
                         try {
                             const a = targetWin.document.createElement('a');
                             a.href = backUrl;
-                            targetWin.document.body.appendChild(a);
+                            const parentNode = targetWin.document.body || targetWin.document.documentElement;
+                            if (parentNode) parentNode.appendChild(a);
                             a.click();
                         } catch (e) { }
                     };
